@@ -1,3 +1,6 @@
+# Lab Stuff
+![commit](https://img.shields.io/github/last-commit/renanfernandes/watchman)
+
 # Watchman
 
 A Raspberry Pi Zero 2 W that acts as a virtual USB drive ("GhostDrive") for a
