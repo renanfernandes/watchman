@@ -1,0 +1,15 @@
+[Unit]
+Description=Watchman Web — Video browser
+After=network.target
+
+[Service]
+Type=simple
+User=watchman
+ExecStart=/usr/bin/python3 /opt/watchman/web.py --config /etc/watchman/watchman.conf
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

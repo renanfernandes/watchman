@@ -1,0 +1,14 @@
+[Unit]
+Description=Watchman — Blink clip interceptor
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/watchman/watchman.py --config /etc/watchman/watchman.conf
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

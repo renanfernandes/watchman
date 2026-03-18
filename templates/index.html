@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watchman</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+        }
+        header {
+            background: #16213e;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #0f3460;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        header h1 { font-size: 1.4rem; color: #e94560; }
+        header span { font-size: 0.85rem; color: #666; }
+        .layout {
+            display: flex;
+            min-height: calc(100vh - 58px);
+        }
+        nav {
+            width: 220px;
+            background: #16213e;
+            padding: 1rem;
+            border-right: 1px solid #0f3460;
+            overflow-y: auto;
+        }
+        nav h2 {
+            font-size: 0.8rem;
+            color: #888;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        nav a {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0.75rem;
+            color: #ccc;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-bottom: 2px;
+            font-size: 0.9rem;
+        }
+        nav a:hover { background: #0f3460; }
+        nav a.active { background: #e94560; color: white; }
+        nav a .count {
+            font-size: 0.75rem;
+            color: #888;
+            background: #0a0a1a;
+            padding: 0 6px;
+            border-radius: 10px;
+        }
+        nav a.active .count { background: rgba(0,0,0,0.3); color: #fff; }
+        main {
+            flex: 1;
+            padding: 1.5rem;
+        }
+        main h2 { margin-bottom: 1rem; color: #e94560; }
+        .empty { color: #555; font-style: italic; margin-top: 2rem; }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 1rem;
+        }
+        .video-card {
+            background: #16213e;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #0f3460;
+        }
+        .video-card video {
+            width: 100%;
+            display: block;
+            background: #000;
+        }
+        .video-info {
+            padding: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .video-info span { font-size: 0.8rem; color: #aaa; }
+        .video-info a {
+            color: #e94560;
+            text-decoration: none;
+            font-size: 0.85rem;
+        }
+        .video-info a:hover { text-decoration: underline; }
+        @media (max-width: 768px) {
+            .layout { flex-direction: column; }
+            nav {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #0f3460;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            nav h2 { width: 100%; }
+            .video-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Watchman</h1>
+        <span>Blink Clip Archive</span>
+    </header>
+    <div class="layout">
+        <nav>
+            <h2>Recordings</h2>
+            {% if dates %}
+                {% for date in dates %}
+                <a href="/date/{{ date.name }}"
+                   class="{% if date.name == current_date %}active{% endif %}">
+                    {{ date.name }}
+                    <span class="count">{{ date.count }}</span>
+                </a>
+                {% endfor %}
+            {% else %}
+                <p class="empty">No recordings yet</p>
+            {% endif %}
+        </nav>
+        <main>
+            {% if current_date %}
+                <h2>{{ current_date }} &mdash; {{ videos|length }} clip{{ 's' if videos|length != 1 }}</h2>
+                {% if videos %}
+                <div class="video-grid">
+                    {% for video in videos %}
+                    <div class="video-card">
+                        <video controls preload="metadata">
+                            <source src="/video/{{ current_date }}/{{ video }}" type="video/mp4">
+                        </video>
+                        <div class="video-info">
+                            <span>{{ video }}</span>
+                            <a href="/download/{{ current_date }}/{{ video }}">Download</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="empty">No clips for this date</p>
+                {% endif %}
+            {% else %}
+                <p class="empty">Select a date to browse recordings</p>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>
