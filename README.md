@@ -1,7 +1,8 @@
 ![commit](https://img.shields.io/github/last-commit/renanfernandes/watchman)
 # Watchman
 
-A Raspberry Pi Zero 2 W that acts as a virtual USB drive ("GhostDrive") for a
+Watchman is a elegant solution to a problem I had: How to properly access and manage the recordings from my Blink Cameras without an active subscription? 
+Watchman makes a Raspberry Pi (in my case the Zero 2 W) acts as a virtual USB drive ("GhostDrive") for a
 Blink Sync Module 2. Intercepts motion-triggered `.mp4` clips and archives them
 locally for remote access — no Blink subscription needed.
 
@@ -33,7 +34,7 @@ Blink Camera → Sync Module 2 → [Pi Zero 2W as USB Drive] → Archive → Web
 
 ## Hardware
 
-- Raspberry Pi Zero 2 W
+- Raspberry Pi Zero 2 W (or any Raspberry Pi, honestly)
 - MicroSD card (16GB+ recommended)
 - USB data cable (micro-USB to USB-A) connecting Pi to Blink Sync Module 2
 - Power supply for the Pi
@@ -203,9 +204,8 @@ sudo journalctl -u watchman-web -f
 
 ## Future Plans
 
-- Ship recordings to a remote storage server
+- Ship recordings to a remote storage server 
 - Home Assistant integration (notifications + video feed)
 
 ## License
-
 MIT
