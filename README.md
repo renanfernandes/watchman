@@ -163,8 +163,9 @@ All settings live in `watchman.conf` (installed to `/etc/watchman/watchman.conf`
 | `MOUNT_POINT` | `/mnt/ghostdrive` | Temporary mount location |
 | `ARCHIVE_DIR` | `/home/pi/archive` | Where videos are permanently stored |
 | `GADGET_MODULE` | `g_mass_storage` | Kernel module name |
-| `SETTLE_TIME` | `30` | Seconds to wait after last write before cycling |
-| `MIN_INTERVAL` | `120` | Minimum seconds between ingest cycles |
+| `SETTLE_TIME` | `60` | Seconds to wait after last write before cycling |
+| `MIN_INTERVAL` | `300` | Minimum seconds between ingest cycles |
+| `RECONNECT_COOLDOWN` | `60` | Seconds to ignore writes after the drive reconnects |
 | `WATCHDOG_THRESHOLD` | `3` | Failures before attempting USB reset |
 | `WEB_HOST` | `0.0.0.0` | Web server bind address |
 | `WEB_PORT` | `5000` | Web server port |

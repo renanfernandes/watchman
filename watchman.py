@@ -32,8 +32,9 @@ DEFAULTS = {
     "MOUNT_POINT": "/mnt/ghostdrive",
     "ARCHIVE_DIR": "/home/watchman/archive",
     "GADGET_MODULE": "g_mass_storage",
-    "SETTLE_TIME": "30",
-    "MIN_INTERVAL": "120",
+    "SETTLE_TIME": "60",
+    "MIN_INTERVAL": "300",
+    "RECONNECT_COOLDOWN": "60",
     "WATCHDOG_THRESHOLD": "3",
 }
 
@@ -118,21 +119,46 @@ def usb_reset(module: str, container: str) -> bool:
 
 # ── Mount / unmount ─────────────────────────────────────────────────────────
 
+# Tracks the loop device attached during an ingest cycle so unmount can
+# detach it.  Single-threaded, so a module-level variable is safe.
+_loop_dev: str | None = None
+
 
 def mount_container(container: str, mount_point: str) -> bool:
-    """Mount the container file locally (loop device)."""
+    """Attach the partitioned container as a loop device and mount partition 1."""
+    global _loop_dev
     Path(mount_point).mkdir(parents=True, exist_ok=True)
     try:
-        run(["mount", "-o", "loop", container, mount_point], timeout=20)
-        log.info("Mounted %s at %s", container, mount_point)
+        result = run(["losetup", "--find", "--show", "-P", container], timeout=15)
+        _loop_dev = result.stdout.strip()
+        partition = f"{_loop_dev}p1"
+
+        # Give the kernel a moment to create the partition device node.
+        for _ in range(10):
+            if Path(partition).exists():
+                break
+            time.sleep(1)
+
+        if not Path(partition).exists():
+            log.error("Partition device not found: %s", partition)
+            run(["losetup", "-d", _loop_dev], check=False)
+            _loop_dev = None
+            return False
+
+        run(["mount", partition, mount_point], timeout=20)
+        log.info("Mounted %s (%s) at %s", container, partition, mount_point)
         return True
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         log.error("Mount failed: %s", e)
+        if _loop_dev:
+            run(["losetup", "-d", _loop_dev], check=False)
+            _loop_dev = None
         return False
 
 
 def unmount_container(mount_point: str) -> bool:
-    """Unmount the container."""
+    """Unmount the container partition and detach the loop device."""
+    global _loop_dev
     try:
         run(["umount", mount_point], check=False)
         log.info("Unmounted %s", mount_point)
@@ -140,6 +166,10 @@ def unmount_container(mount_point: str) -> bool:
     except Exception as e:
         log.error("Unmount failed: %s", e)
         return False
+    finally:
+        if _loop_dev:
+            run(["losetup", "-d", _loop_dev], check=False)
+            _loop_dev = None
 
 
 # ── File operations ─────────────────────────────────────────────────────────
@@ -240,6 +270,7 @@ def main() -> int:
     module = cfg["GADGET_MODULE"]
     settle_time = int(cfg["SETTLE_TIME"])
     min_interval = int(cfg["MIN_INTERVAL"])
+    reconnect_cooldown = int(cfg["RECONNECT_COOLDOWN"])
     watchdog_threshold = int(cfg["WATCHDOG_THRESHOLD"])
 
     # Must run as root for modprobe and mount.
@@ -265,8 +296,8 @@ def main() -> int:
     log.info("Watchman starting")
     log.info("Container:  %s", container)
     log.info("Archive:    %s", archive_dir)
-    log.info("Settle: %ds | Min interval: %ds | Watchdog after: %d failures",
-             settle_time, min_interval, watchdog_threshold)
+    log.info("Settle: %ds | Min interval: %ds | Cooldown: %ds | Watchdog after: %d failures",
+             settle_time, min_interval, reconnect_cooldown, watchdog_threshold)
 
     # Load gadget on startup so the USB drive is visible immediately.
     if not args.no_gadget:
@@ -285,6 +316,7 @@ def main() -> int:
     last_mtime = Path(container).stat().st_mtime
     last_change = 0.0
     last_cycle = 0.0
+    cooldown_until = 0.0
     consecutive_failures = 0
     cycle_pending = False
 
@@ -296,9 +328,12 @@ def main() -> int:
             # Detect new writes to the container.
             if current_mtime != last_mtime:
                 last_mtime = current_mtime
-                last_change = now
-                cycle_pending = True
-                log.info("Write detected — waiting for activity to settle...")
+                if now >= cooldown_until:
+                    last_change = now
+                    cycle_pending = True
+                    log.info("Write detected — waiting for activity to settle...")
+                else:
+                    log.debug("Write detected during reconnect cooldown — ignoring")
 
             # Writes have settled and enough time has passed — run a cycle.
             if cycle_pending and (now - last_change) >= settle_time:
@@ -327,8 +362,11 @@ def main() -> int:
                         usb_reset(module, container)
                         consecutive_failures = 0
 
-                # Refresh mtime so we don't immediately re-trigger.
+                # Refresh mtime baseline and start cooldown so Blink's
+                # post-reconnect filesystem activity doesn't trigger a new cycle.
                 last_mtime = Path(container).stat().st_mtime
+                cooldown_until = time.time() + reconnect_cooldown
+                log.debug("Reconnect cooldown: %ds", reconnect_cooldown)
 
             time.sleep(5)
 
