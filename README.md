@@ -126,7 +126,10 @@ Or manually:
 
 ```bash
 sudo dd if=/dev/zero of=/ghostdrive.bin bs=1M count=6144 status=progress
-sudo mkfs.exfat -n GHOSTDRIVE /ghostdrive.bin
+printf ',,7,*\n' | sudo sfdisk --label dos /ghostdrive.bin
+LOOPDEV=$(sudo losetup --find --show -P /ghostdrive.bin)
+sudo mkfs.exfat -n GHOSTDRIVE ${LOOPDEV}p1
+sudo losetup -d "$LOOPDEV"
 ```
 
 ### 4. Test it

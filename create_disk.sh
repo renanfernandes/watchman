@@ -41,6 +41,16 @@ if ! command -v mkfs.exfat >/dev/null 2>&1; then
     exit 1
 fi
 
+if ! command -v sfdisk >/dev/null 2>&1; then
+    echo "[ERROR] sfdisk not found. Install with: sudo apt-get install -y fdisk"
+    exit 1
+fi
+
+if ! command -v losetup >/dev/null 2>&1; then
+    echo "[ERROR] losetup not found. Install with: sudo apt-get install -y util-linux"
+    exit 1
+fi
+
 if [ -f "$CONTAINER" ]; then
     echo "[WARN] Container already exists: $CONTAINER"
     read -p "Overwrite? (y/N) " -r
@@ -50,19 +60,43 @@ if [ -f "$CONTAINER" ]; then
     fi
 fi
 
-# ── Create and format ──────────────────────────────────────────────────────
+# ── Create, partition, and format ──────────────────────────────────────────
 
-echo "[1/3] Creating ${CONTAINER_SIZE_MB}MB container..."
+echo "[1/4] Creating ${CONTAINER_SIZE_MB}MB container..."
 dd if=/dev/zero of="$CONTAINER" bs=1M count="$CONTAINER_SIZE_MB" status=progress
 
 echo ""
-echo "[2/3] Formatting as exFAT..."
-mkfs.exfat -n "GHOSTDRIVE" "$CONTAINER"
+echo "[2/4] Creating MBR partition table..."
+# Create a DOS/MBR label with a single primary partition that spans the image.
+# Type 0x07 improves compatibility for exFAT-like removable media.
+printf ',,7,*\n' | sfdisk --label dos "$CONTAINER"
 
 echo ""
-echo "[3/3] Verifying mount..."
+echo "[3/4] Attaching loop device and formatting partition as exFAT..."
+LOOPDEV=$(losetup --find --show -P "$CONTAINER")
+PARTITION="${LOOPDEV}p1"
+
+cleanup() {
+    losetup -d "$LOOPDEV" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+for _ in $(seq 1 10); do
+    [ -b "$PARTITION" ] && break
+    sleep 1
+done
+
+if [ ! -b "$PARTITION" ]; then
+    echo "[ERROR] Partition device not found: $PARTITION"
+    exit 1
+fi
+
+mkfs.exfat -n "GHOSTDRIVE" "$PARTITION"
+
+echo ""
+echo "[4/4] Verifying mount..."
 TMPDIR=$(mktemp -d)
-mount -o loop "$CONTAINER" "$TMPDIR"
+mount "$PARTITION" "$TMPDIR"
 touch "$TMPDIR/.ghostdrive_ok" && rm "$TMPDIR/.ghostdrive_ok"
 umount "$TMPDIR"
 rmdir "$TMPDIR"

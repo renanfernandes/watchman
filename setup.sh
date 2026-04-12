@@ -46,7 +46,7 @@ echo ""
 
 echo "[1/7] Installing dependencies..."
 apt-get update -qq
-apt-get install -y -qq python3 python3-flask exfatprogs watchdog
+apt-get install -y -qq python3 python3-flask exfatprogs fdisk util-linux watchdog
 echo "[OK] Dependencies installed"
 echo ""
 
