@@ -34,15 +34,40 @@ def load_config(path: str) -> dict:
 
 
 def list_dates():
-    """Get all recording dates with video counts, newest first."""
+    """Get all recording dates grouped by year > month, newest first."""
+    import calendar
     if not ARCHIVE_DIR.exists():
         return []
-    dates = []
-    for folder in sorted(ARCHIVE_DIR.iterdir(), reverse=True):
-        if folder.is_dir():
-            count = sum(1 for f in folder.iterdir() if f.suffix == ".mp4")
-            dates.append({"name": folder.name, "count": count})
-    return dates
+
+    items = []
+    for folder in ARCHIVE_DIR.iterdir():
+        if not folder.is_dir():
+            continue
+        parts = folder.name.split("-")
+        if len(parts) != 3 or not all(p.isdigit() for p in parts):
+            continue
+        year, month, _ = parts
+        count = sum(1 for f in folder.iterdir() if f.suffix == ".mp4")
+        items.append({"name": folder.name, "year": year, "month": month, "count": count})
+
+    items.sort(key=lambda x: x["name"], reverse=True)
+
+    grouped = {}
+    for item in items:
+        y, m = item["year"], item["month"]
+        grouped.setdefault(y, {}).setdefault(m, []).append(item)
+
+    result = []
+    for year in sorted(grouped, reverse=True):
+        months = []
+        for month in sorted(grouped[year], reverse=True):
+            months.append({
+                "month": month,
+                "month_name": calendar.month_name[int(month)],
+                "days": grouped[year][month],
+            })
+        result.append({"year": year, "months": months})
+    return result
 
 
 def safe_date(date_str: str) -> bool:
@@ -80,7 +105,7 @@ def by_date(date_str: str):
     if not date_dir.resolve().is_relative_to(ARCHIVE_DIR.resolve()):
         abort(403)
 
-    videos = sorted(f.name for f in date_dir.iterdir() if f.suffix == ".mp4")
+    videos = sorted((f.name for f in date_dir.iterdir() if f.suffix == ".mp4"), reverse=True)
     return render_template("index.html",
                            dates=list_dates(), current_date=date_str, videos=videos)
 

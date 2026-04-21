@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-HOST="${1:-watchman@10.0.1.244}"
+HOST="${1:-watchman@10.2.0.5}"
 
 echo "=== Deploying to $HOST ==="
 

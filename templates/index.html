@@ -59,6 +59,41 @@
             border-radius: 10px;
         }
         nav a.active .count { background: rgba(0,0,0,0.3); color: #fff; }
+        .nav-year { margin-bottom: 0.25rem; }
+        .nav-year-header {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #e94560;
+            padding: 0.4rem 0.5rem;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 4px;
+        }
+        .nav-year-header:hover { background: #0f3460; }
+        .nav-year-header::before { content: "▾"; transition: transform 0.15s; }
+        .nav-year-header.collapsed::before { transform: rotate(-90deg); }
+        .nav-month { margin-left: 0.5rem; margin-bottom: 0.1rem; }
+        .nav-month-header {
+            font-size: 0.75rem;
+            color: #888;
+            padding: 0.3rem 0.5rem;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .nav-month-header:hover { background: #0f3460; color: #ccc; }
+        .nav-month-header::before { content: "▾"; transition: transform 0.15s; font-size: 0.7rem; }
+        .nav-month-header.collapsed::before { transform: rotate(-90deg); }
+        .nav-month-days { margin-left: 0.5rem; }
+        .nav-year-body.collapsed, .nav-month-days.collapsed { display: none; }
         main {
             flex: 1;
             padding: 1.5rem;
@@ -118,12 +153,30 @@
         <nav>
             <h2>Recordings</h2>
             {% if dates %}
-                {% for date in dates %}
-                <a href="/date/{{ date.name }}"
-                   class="{% if date.name == current_date %}active{% endif %}">
-                    {{ date.name }}
-                    <span class="count">{{ date.count }}</span>
-                </a>
+                {% for year_group in dates %}
+                <div class="nav-year">
+                    <div class="nav-year-header" onclick="toggleSection(this, 'year-{{ year_group.year }}')">
+                        {{ year_group.year }}
+                    </div>
+                    <div class="nav-year-body" id="year-{{ year_group.year }}">
+                        {% for month_group in year_group.months %}
+                        <div class="nav-month">
+                            <div class="nav-month-header" onclick="toggleSection(this, 'month-{{ year_group.year }}-{{ month_group.month }}')">
+                                {{ month_group.month_name }}
+                            </div>
+                            <div class="nav-month-days" id="month-{{ year_group.year }}-{{ month_group.month }}">
+                                {% for date in month_group.days %}
+                                <a href="/date/{{ date.name }}"
+                                   class="{% if date.name == current_date %}active{% endif %}">
+                                    {{ date.name }}
+                                    <span class="count">{{ date.count }}</span>
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
                 {% endfor %}
             {% else %}
                 <p class="empty">No recordings yet</p>
@@ -154,5 +207,46 @@
             {% endif %}
         </main>
     </div>
+    <script>
+        function toggleSection(header, bodyId) {
+            const body = document.getElementById(bodyId);
+            const collapsed = body.classList.toggle('collapsed');
+            header.classList.toggle('collapsed', collapsed);
+        }
+
+        // On load: collapse all sections, then expand those containing the active link
+        // or matching the current calendar month
+        document.addEventListener('DOMContentLoaded', function () {
+            const activeLink = document.querySelector('nav a.active');
+            const now = new Date();
+            const curYear  = String(now.getFullYear());
+            const curMonth = String(now.getMonth() + 1).padStart(2, '0');
+
+            document.querySelectorAll('.nav-year-body').forEach(function (body) {
+                const header = body.previousElementSibling;
+                const hasActive = body.querySelector('a.active');
+                const isCurrentYear = body.id === 'year-' + curYear;
+                if (!hasActive && !isCurrentYear) {
+                    body.classList.add('collapsed');
+                    header.classList.add('collapsed');
+                }
+            });
+
+            document.querySelectorAll('.nav-month-days').forEach(function (body) {
+                const header = body.previousElementSibling;
+                const hasActive = body.querySelector('a.active');
+                const isCurrentMonth = body.id === 'month-' + curYear + '-' + curMonth;
+                if (!hasActive && !isCurrentMonth) {
+                    body.classList.add('collapsed');
+                    header.classList.add('collapsed');
+                }
+            });
+
+            // Scroll active link into view
+            if (activeLink) {
+                activeLink.scrollIntoView({ block: 'nearest' });
+            }
+        });
+    </script>
 </body>
 </html>

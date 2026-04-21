@@ -174,9 +174,23 @@ All settings live in `watchman.conf` (installed to `/etc/watchman/watchman.conf`
 
 Browse to `http://<pi-ip>:5000` to:
 
-- **Browse** recordings by date
-- **Play** clips directly in your browser
+- **Browse** recordings organised by **year → month → day** in a collapsible sidebar
+- **Play** clips directly in your browser (newest clip shown first for each day)
 - **Download** individual clips
+
+## Deploying Updates
+
+From your development machine (requires SSH access to the Pi):
+
+```bash
+bash deploy.sh                    # uses default host watchman@10.0.1.244
+bash deploy.sh watchman@10.2.0.5  # or specify a different host
+```
+
+The script:
+1. Rsyncs all project files to `~/watchman/` on the Pi
+2. Copies `watchman.py`, `web.py`, and `templates/` to `/opt/watchman/`
+3. Restarts both systemd services (`watchman` and `watchman-web`)
 
 ## Checking Logs
 
