@@ -29,8 +29,10 @@ Blink Camera → Sync Module 2 → [Pi Zero 2W as USB Drive] → Archive → Web
 | `watchman.conf` | All configuration in one place |
 | `create_disk.sh` | Creates the 6GB exFAT virtual disk |
 | `setup.sh` | Full automated setup (deps, boot, disk, services) |
+| `net-watchdog.sh` | Network watchdog — reboots Pi if internet is lost too long |
 | `watchman.service` | systemd unit for the ingest service |
 | `watchman-web.service` | systemd unit for the web interface |
+| `watchman-net.service` | systemd unit for the network watchdog |
 
 ## Hardware
 
@@ -168,8 +170,10 @@ All settings live in `watchman.conf` (installed to `/etc/watchman/watchman.conf`
 | `RECONNECT_COOLDOWN` | `60` | Seconds to ignore writes after the drive reconnects |
 | `WATCHDOG_THRESHOLD` | `3` | Failures before attempting USB reset |
 | `WEB_HOST` | `0.0.0.0` | Web server bind address |
-| `WEB_PORT` | `5000` | Web server port |
-
+| `WEB_PORT` | `5000` | Web server port || `NET_WATCHDOG_ENABLED` | `yes` | Enable/disable the network watchdog (`yes`/`no`) |
+| `NET_WATCHDOG_HOST` | `8.8.8.8` | Host to ping to verify internet connectivity |
+| `NET_WATCHDOG_TIMEOUT` | `300` | Seconds offline before rebooting (default: 5 min) |
+| `NET_WATCHDOG_INTERVAL` | `30` | Seconds between each connectivity check |
 ## Web Interface
 
 Browse to `http://<pi-ip>:5000` to:
@@ -200,6 +204,9 @@ sudo journalctl -u watchman -f
 
 # Web interface
 sudo journalctl -u watchman-web -f
+
+# Network watchdog
+sudo journalctl -u watchman-net -f
 ```
 
 ## Troubleshooting

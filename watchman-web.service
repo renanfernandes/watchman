@@ -1,12 +1,14 @@
 [Unit]
 Description=Watchman Web — Video browser
 After=network.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=watchman
 ExecStart=/usr/bin/python3 /opt/watchman/web.py --config /etc/watchman/watchman.conf
-Restart=on-failure
+Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal

@@ -14,11 +14,11 @@ rsync -avz --exclude='.git' ./ "$HOST:~/watchman/"
 
 echo ""
 echo "[2/3] Installing + restarting services..."
-ssh "$HOST" 'sudo cp ~/watchman/watchman.py ~/watchman/web.py /opt/watchman/ && sudo cp -r ~/watchman/templates /opt/watchman/ && sudo cp ~/watchman/watchman.service ~/watchman/watchman-web.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart watchman watchman-web'
+ssh "$HOST" 'sudo cp ~/watchman/watchman.py ~/watchman/web.py ~/watchman/net-watchdog.sh /opt/watchman/ && sudo chmod +x /opt/watchman/net-watchdog.sh && sudo cp -r ~/watchman/templates /opt/watchman/ && sudo cp ~/watchman/watchman.service ~/watchman/watchman-web.service ~/watchman/watchman-net.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl restart watchman watchman-web && sudo systemctl restart watchman-net 2>/dev/null || true'
 
 echo ""
 echo "[3/3] Checking services..."
-ssh "$HOST" 'systemctl is-active watchman watchman-web'
+ssh "$HOST" 'systemctl is-active watchman watchman-web watchman-net'
 
 echo ""
 echo "=== Deploy complete ==="

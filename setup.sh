@@ -176,7 +176,7 @@ echo ""
 
 # ── Step 7: Configure hardware watchdog ─────────────────────────────────────
 
-echo "[7/7] Configuring hardware watchdog..."
+echo "[7/8] Configuring hardware watchdog..."
 
 # Enable the hardware watchdog timer in boot config
 if ! grep -q "dtparam=watchdog=on" "$BOOT_DIR/config.txt"; then
@@ -197,6 +197,34 @@ systemctl enable watchdog
 systemctl start watchdog
 
 echo "[OK] Hardware watchdog configured (60s timeout)"
+echo ""
+
+# ── Step 8: Install network watchdog ────────────────────────────────────────
+
+echo "[8/8] Installing network watchdog..."
+
+# Read NET_WATCHDOG_ENABLED from config
+NET_WATCHDOG_ENABLED="yes"
+if [ -f "$CONFIG_FILE" ]; then
+    while IFS='=' read -r key value; do
+        key=$(echo "$key" | tr -d '\r' | xargs)
+        value=$(echo "$value" | tr -d '\r' | xargs)
+        [ "$key" = "NET_WATCHDOG_ENABLED" ] && NET_WATCHDOG_ENABLED="$value"
+    done < <(grep -v '^\s*#' "$CONFIG_FILE" | grep '=')
+fi
+
+cp "$SCRIPT_DIR/net-watchdog.sh" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/net-watchdog.sh"
+cp "$SCRIPT_DIR/watchman-net.service" /etc/systemd/system/
+systemctl daemon-reload
+
+if [ "$NET_WATCHDOG_ENABLED" = "yes" ]; then
+    systemctl enable --now watchman-net.service
+    echo "[OK] Network watchdog enabled and started"
+else
+    systemctl disable watchman-net.service 2>/dev/null || true
+    echo "[OK] Network watchdog installed but disabled (NET_WATCHDOG_ENABLED=no)"
+fi
 echo ""
 
 # ── Done ────────────────────────────────────────────────────────────────────
