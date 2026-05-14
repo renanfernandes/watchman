@@ -14,6 +14,9 @@ NET_WATCHDOG_ENABLED="yes"
 NET_WATCHDOG_HOST="8.8.8.8"
 NET_WATCHDOG_TIMEOUT="300"   # seconds without connectivity before rebooting
 NET_WATCHDOG_INTERVAL="30"   # seconds between each connectivity check
+NOTIFY_ENABLED="yes"
+PUSHOVER_TOKEN=""
+PUSHOVER_USER=""
 
 # ── Load config ───────────────────────────────────────────────────────────────
 
@@ -26,6 +29,9 @@ if [ -f "$CONFIG" ]; then
             NET_WATCHDOG_HOST)     NET_WATCHDOG_HOST="$value" ;;
             NET_WATCHDOG_TIMEOUT)  NET_WATCHDOG_TIMEOUT="$value" ;;
             NET_WATCHDOG_INTERVAL) NET_WATCHDOG_INTERVAL="$value" ;;
+            NOTIFY_ENABLED)        NOTIFY_ENABLED="$value" ;;
+            PUSHOVER_TOKEN)        PUSHOVER_TOKEN="$value" ;;
+            PUSHOVER_USER)         PUSHOVER_USER="$value" ;;
         esac
     done < <(grep -v '^\s*#' "$CONFIG" | grep '=')
 fi
@@ -35,10 +41,36 @@ if [ "$NET_WATCHDOG_ENABLED" != "yes" ]; then
     exit 0
 fi
 
+# ── Pushover helper ───────────────────────────────────────────────────────────
+
+notify() {
+    local title="$1"
+    local message="$2"
+    local priority="${3:-0}"   # -1 quiet, 0 normal, 1 high
+
+    if [ "$NOTIFY_ENABLED" != "yes" ] || [ -z "$PUSHOVER_TOKEN" ] || [ -z "$PUSHOVER_USER" ]; then
+        return 0
+    fi
+
+    curl -s \
+        --form-string "token=${PUSHOVER_TOKEN}" \
+        --form-string "user=${PUSHOVER_USER}" \
+        --form-string "title=${title}" \
+        --form-string "message=${message}" \
+        --form-string "priority=${priority}" \
+        https://api.pushover.net/1/messages.json > /dev/null 2>&1 || true
+}
+
 echo "Net watchdog started."
 echo "  Host:      $NET_WATCHDOG_HOST"
 echo "  Timeout:   ${NET_WATCHDOG_TIMEOUT}s"
 echo "  Interval:  ${NET_WATCHDOG_INTERVAL}s"
+echo "  Notify:    $NOTIFY_ENABLED"
+
+# ── Startup notification ──────────────────────────────────────────────────────
+
+HOSTNAME=$(hostname)
+notify "Watchman Online" "${HOSTNAME} is online and monitoring connectivity." -1
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
@@ -56,6 +88,8 @@ while true; do
 
         if [ "$offline_seconds" -ge "$NET_WATCHDOG_TIMEOUT" ]; then
             echo "Connectivity lost for ${offline_seconds}s — rebooting now."
+            notify "Watchman Rebooting" "${HOSTNAME} lost connectivity for ${offline_seconds}s. Rebooting now." 1
+            sleep 3   # give Pushover a moment to send before reboot
             /sbin/reboot
         fi
     fi

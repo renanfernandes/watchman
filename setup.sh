@@ -4,11 +4,14 @@
 #
 # What this does:
 #   1. Installs required packages (exfatprogs, python3-flask, watchdog)
-#   2. Configures USB gadget mode in boot files (config.txt + cmdline.txt)
-#   3. Creates the GhostDrive virtual disk (6GB exFAT)
-#   4. Installs Watchman service files
-#   5. Enables auto-start on boot
-#   6. Configures hardware watchdog (auto-reboot on system hang)
+#   2. Disables WiFi power save via NetworkManager (prevents silent WiFi drops)
+#   3. Configures USB gadget mode in boot files (config.txt + cmdline.txt)
+#   4. Creates the GhostDrive virtual disk (6GB exFAT)
+#   5. Installs Watchman service files
+#   6. Enables auto-start on boot
+#   7. Configures hardware watchdog (auto-reboot on system hang)
+#   8. Installs network watchdog (auto-reboot on prolonged connectivity loss)
+#   9. Schedules a monthly reboot (1st of the month at 03:00)
 #
 # Usage: sudo bash setup.sh
 
@@ -44,16 +47,26 @@ echo ""
 
 # ── Step 1: Install dependencies ────────────────────────────────────────────
 
-echo "[1/7] Installing dependencies..."
+echo "[1/9] Installing dependencies..."
 apt-get update -qq
 apt-get install -y -qq python3 python3-flask exfatprogs fdisk util-linux watchdog
 echo "[OK] Dependencies installed"
 echo ""
 
-# ── Step 2: Configure boot for USB gadget mode ──────────────────────────────
+# ── Step 2: Disable WiFi power save ─────────────────────────────────────────────
 
-echo "[2/7] Configuring boot files for USB gadget mode..."
+echo "[2/9] Disabling WiFi power save..."
+mkdir -p /etc/NetworkManager/conf.d
+cat > /etc/NetworkManager/conf.d/wifi-powersave-off.conf << 'NM_EOF'
+[connection]
+wifi.powersave = 2
+NM_EOF
+echo "[OK] WiFi power save disabled via NetworkManager"
+echo ""
 
+# ── Step 3: Configure boot for USB gadget mode ───────────────────────────
+
+echo "[3/9] Configuring boot files for USB gadget mode..."
 # config.txt — enable the dwc2 USB controller in peripheral (gadget) mode.
 # The overlay MUST be in the [all] section so it applies to every Pi model.
 # Remove any dwc2 overlay lines from model-specific sections first.
@@ -87,9 +100,9 @@ fi
 echo "[OK] Boot configured"
 echo ""
 
-# ── Step 3: Install Watchman files ──────────────────────────────────────────
+# ── Step 4: Install Watchman files ──────────────────────────────────────────
 
-echo "[3/7] Installing Watchman..."
+echo "[4/9] Installing Watchman..."
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
 
 cp "$SCRIPT_DIR/watchman.py" "$INSTALL_DIR/"
@@ -108,9 +121,9 @@ fi
 echo "[OK] Files installed"
 echo ""
 
-# ── Step 4: Create virtual disk ─────────────────────────────────────────────
+# ── Step 5: Create virtual disk ─────────────────────────────────────────────
 
-echo "[4/7] Setting up GhostDrive..."
+echo "[5/9] Setting up GhostDrive..."
 
 # Source config values
 CONTAINER="/ghostdrive.bin"
@@ -135,9 +148,9 @@ fi
 echo "[OK] GhostDrive ready"
 echo ""
 
-# ── Step 5: Create directories ──────────────────────────────────────────────
+# ── Step 6: Create directories ──────────────────────────────────────────────
 
-echo "[5/7] Creating directories..."
+echo "[6/9] Creating directories..."
 
 ARCHIVE_DIR="/home/watchman/archive"
 MOUNT_POINT="/mnt/ghostdrive"
@@ -161,9 +174,9 @@ fi
 echo "[OK] Directories created"
 echo ""
 
-# ── Step 6: Install systemd services ────────────────────────────────────────
+# ── Step 7: Install systemd services ────────────────────────────────────────
 
-echo "[6/7] Installing systemd services..."
+echo "[7/9] Installing systemd services..."
 
 cp "$SCRIPT_DIR/watchman.service" /etc/systemd/system/
 cp "$SCRIPT_DIR/watchman-web.service" /etc/systemd/system/
@@ -174,9 +187,9 @@ systemctl enable watchman.service watchman-web.service
 echo "[OK] Services installed and enabled"
 echo ""
 
-# ── Step 7: Configure hardware watchdog ─────────────────────────────────────
+# ── Step 8: Configure hardware watchdog ─────────────────────────────────────
 
-echo "[7/8] Configuring hardware watchdog..."
+echo "[8/9] Configuring hardware watchdog..."
 
 # Enable the hardware watchdog timer in boot config
 if ! grep -q "dtparam=watchdog=on" "$BOOT_DIR/config.txt"; then
@@ -199,9 +212,9 @@ systemctl start watchdog
 echo "[OK] Hardware watchdog configured (60s timeout)"
 echo ""
 
-# ── Step 8: Install network watchdog ────────────────────────────────────────
+# ── Step 9: Install network watchdog ────────────────────────────────────────
 
-echo "[8/8] Installing network watchdog..."
+echo "[9/9] Installing network watchdog..."
 
 # Read NET_WATCHDOG_ENABLED from config
 NET_WATCHDOG_ENABLED="yes"
@@ -224,6 +237,22 @@ if [ "$NET_WATCHDOG_ENABLED" = "yes" ]; then
 else
     systemctl disable watchman-net.service 2>/dev/null || true
     echo "[OK] Network watchdog installed but disabled (NET_WATCHDOG_ENABLED=no)"
+fi
+echo ""
+
+# ── Step 9: Schedule monthly reboot ─────────────────────────────────────────
+
+echo "[9/9] Scheduling monthly reboot..."
+
+CRON_JOB="0 3 1 * * /sbin/reboot"
+CRON_MARKER="# Watchman: monthly reboot"
+
+# Install into root's crontab if not already present
+if crontab -l 2>/dev/null | grep -qF "$CRON_MARKER"; then
+    echo "  Monthly reboot already scheduled"
+else
+    ( crontab -l 2>/dev/null; echo ""; echo "$CRON_MARKER"; echo "$CRON_JOB" ) | crontab -
+    echo "  Added: $CRON_JOB (1st of every month at 03:00)"
 fi
 echo ""
 

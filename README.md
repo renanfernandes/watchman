@@ -170,10 +170,32 @@ All settings live in `watchman.conf` (installed to `/etc/watchman/watchman.conf`
 | `RECONNECT_COOLDOWN` | `60` | Seconds to ignore writes after the drive reconnects |
 | `WATCHDOG_THRESHOLD` | `3` | Failures before attempting USB reset |
 | `WEB_HOST` | `0.0.0.0` | Web server bind address |
-| `WEB_PORT` | `5000` | Web server port || `NET_WATCHDOG_ENABLED` | `yes` | Enable/disable the network watchdog (`yes`/`no`) |
+| `WEB_PORT` | `5000` | Web server port |
+| `NET_WATCHDOG_ENABLED` | `yes` | Enable/disable the network watchdog (`yes`/`no`) |
 | `NET_WATCHDOG_HOST` | `8.8.8.8` | Host to ping to verify internet connectivity |
 | `NET_WATCHDOG_TIMEOUT` | `300` | Seconds offline before rebooting (default: 5 min) |
 | `NET_WATCHDOG_INTERVAL` | `30` | Seconds between each connectivity check |
+| `NOTIFY_ENABLED` | `yes` | Enable/disable Pushover notifications (`yes`/`no`) |
+| `PUSHOVER_TOKEN` | _(required)_ | Pushover application API token |
+| `PUSHOVER_USER` | _(required)_ | Pushover user key |
+## Notifications (Pushover)
+
+Watchman can send push notifications via [Pushover](https://pushover.net) when:
+- The Pi is about to reboot due to connectivity loss
+- The Pi comes back online after a reboot
+
+**Setup:**
+1. Create a free account at [pushover.net](https://pushover.net)
+2. Create a new application to get an **API token**
+3. Copy your **user key** from the dashboard
+4. Add both to `watchman.conf`:
+
+```ini
+NOTIFY_ENABLED=yes
+PUSHOVER_TOKEN=your_app_token_here
+PUSHOVER_USER=your_user_key_here
+```
+
 ## Web Interface
 
 Browse to `http://<pi-ip>:5000` to:
