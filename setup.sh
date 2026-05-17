@@ -50,6 +50,12 @@ echo ""
 echo "[1/9] Installing dependencies..."
 apt-get update -qq
 apt-get install -y -qq python3 python3-flask exfatprogs fdisk util-linux watchdog
+# Enable persistent journal so logs survive reboots
+mkdir -p /var/log/journal
+chown root:systemd-journal /var/log/journal
+chmod 2755 /var/log/journal
+systemd-tmpfiles --create --prefix /var/log/journal
+systemctl restart systemd-journald
 echo "[OK] Dependencies installed"
 echo ""
 
@@ -108,7 +114,9 @@ mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
 cp "$SCRIPT_DIR/watchman.py" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/web.py" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/templates" "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/watchman.py" "$INSTALL_DIR/web.py"
+cp "$SCRIPT_DIR/net-watchdog.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/watchman-startup.sh" "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/watchman.py" "$INSTALL_DIR/web.py" "$INSTALL_DIR/net-watchdog.sh" "$INSTALL_DIR/watchman-startup.sh"
 
 # Only install config if it doesn't already exist (don't overwrite user edits)
 if [ ! -f "$CONFIG_FILE" ]; then
@@ -180,9 +188,10 @@ echo "[7/9] Installing systemd services..."
 
 cp "$SCRIPT_DIR/watchman.service" /etc/systemd/system/
 cp "$SCRIPT_DIR/watchman-web.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/watchman-startup.service" /etc/systemd/system/
 
 systemctl daemon-reload
-systemctl enable watchman.service watchman-web.service
+systemctl enable watchman.service watchman-web.service watchman-startup.service
 
 echo "[OK] Services installed and enabled"
 echo ""

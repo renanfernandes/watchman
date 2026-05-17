@@ -1,0 +1,16 @@
+[Unit]
+Description=Watchman Startup — diagnostics, fix verification, and notification
+After=network-online.target watchman.service watchman-net.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/opt/watchman/watchman-startup.sh
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=watchman-startup
+
+[Install]
+WantedBy=multi-user.target

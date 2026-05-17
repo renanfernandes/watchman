@@ -5,3 +5,9 @@ __pycache__/
 .env
 *.log
 watchman.conf
+
+# Personal troubleshooting — not part of the project
+troubleshoot.sh
+notify-when-online.sh
+logs/
+watchman.conf

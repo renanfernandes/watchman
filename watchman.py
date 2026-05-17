@@ -12,6 +12,7 @@ Usage:
 """
 
 import argparse
+import json
 import logging
 import os
 import shutil
@@ -36,6 +37,7 @@ DEFAULTS = {
     "MIN_INTERVAL": "300",
     "RECONNECT_COOLDOWN": "60",
     "WATCHDOG_THRESHOLD": "3",
+    "CONNECTIVITY_LOG": "/home/watchman/logs/connectivity.jsonl",
 }
 
 
@@ -52,6 +54,55 @@ def load_config(path: str) -> dict:
             key, value = line.split("=", 1)
             config[key.strip()] = value.strip()
     return config
+
+
+# ── Connectivity logging ────────────────────────────────────────────────────
+
+
+def connectivity_snapshot() -> dict:
+    """Collect current WiFi signal, IP, and power-save state."""
+    data: dict = {"ts": datetime.now().isoformat()}
+
+    try:
+        r = run(["iw", "dev", "wlan0", "link"], check=False, timeout=5)
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("signal:"):
+                data["rssi"] = line.split(":", 1)[1].strip()
+            elif line.startswith("SSID:"):
+                data["ssid"] = line.split(":", 1)[1].strip()
+    except Exception:
+        pass
+
+    try:
+        r = run(["hostname", "-I"], check=False, timeout=5)
+        parts = r.stdout.strip().split()
+        data["ip"] = parts[0] if parts else "unknown"
+    except Exception:
+        pass
+
+    try:
+        r = run(["iw", "dev", "wlan0", "get", "power_save"], check=False, timeout=5)
+        data["power_save"] = r.stdout.strip()
+    except Exception:
+        pass
+
+    return data
+
+
+def log_connectivity(log_path: str, event: str, extra: dict | None = None) -> None:
+    """Append a connectivity event as a JSON line to the log file."""
+    entry = connectivity_snapshot()
+    entry["event"] = event
+    if extra:
+        entry.update(extra)
+    try:
+        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+        log.debug("Connectivity logged: %s", event)
+    except Exception as e:
+        log.warning("Failed to write connectivity log: %s", e)
 
 
 # ── Shell helpers ───────────────────────────────────────────────────────────
@@ -272,6 +323,7 @@ def main() -> int:
     min_interval = int(cfg["MIN_INTERVAL"])
     reconnect_cooldown = int(cfg["RECONNECT_COOLDOWN"])
     watchdog_threshold = int(cfg["WATCHDOG_THRESHOLD"])
+    connectivity_log = cfg["CONNECTIVITY_LOG"]
 
     # Must run as root for modprobe and mount.
     if hasattr(os, "geteuid") and os.geteuid() != 0:
@@ -332,6 +384,7 @@ def main() -> int:
                     last_change = now
                     cycle_pending = True
                     log.info("Write detected — waiting for activity to settle...")
+                    log_connectivity(connectivity_log, "write_detected")
                 else:
                     log.debug("Write detected during reconnect cooldown — ignoring")
 
@@ -349,12 +402,16 @@ def main() -> int:
 
                 if result >= 0:
                     consecutive_failures = 0
+                    log_connectivity(connectivity_log, "ingest_complete",
+                                     {"files_archived": result})
                     if result > 0:
                         log.info("Cycle done: %d file(s) archived", result)
                     else:
                         log.info("Cycle done: no new files")
                 else:
                     consecutive_failures += 1
+                    log_connectivity(connectivity_log, "ingest_failed",
+                                     {"consecutive_failures": consecutive_failures})
                     log.warning("Cycle failed (%d/%d before watchdog reset)",
                                 consecutive_failures, watchdog_threshold)
 
