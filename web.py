@@ -8,6 +8,8 @@ Usage:
 """
 
 import argparse
+import json
+from datetime import date as _date
 from pathlib import Path
 from flask import Flask, render_template, send_file, abort, request, redirect, url_for
 import io
@@ -72,6 +74,21 @@ def list_dates():
     return result
 
 
+def all_dates_map() -> dict:
+    """Return {date_str: clip_count} for every date folder."""
+    result = {}
+    if not ARCHIVE_DIR.exists():
+        return result
+    for folder in ARCHIVE_DIR.iterdir():
+        if not folder.is_dir():
+            continue
+        parts = folder.name.split("-")
+        if len(parts) != 3 or not all(p.isdigit() for p in parts):
+            continue
+        result[folder.name] = sum(1 for f in folder.iterdir() if f.suffix == ".mp4")
+    return result
+
+
 def safe_date(date_str: str) -> bool:
     """Validate date string is exactly YYYY-MM-DD format."""
     return (
@@ -85,14 +102,33 @@ def safe_filename(filename: str) -> bool:
     return ".." not in filename and "/" not in filename and "\\" not in filename
 
 
+def parse_video_meta(filename: str) -> dict:
+    """Extract time and camera name from Blink filename (HH-MM-SS_Camera_NNN.mp4)."""
+    stem = Path(filename).stem  # e.g. "13-38-41_DoorbellFront_001"
+    parts = stem.split("_", 2)
+    time_str = ""
+    camera = ""
+    if len(parts) >= 1:
+        t = parts[0]  # "13-38-41"
+        if len(t) == 8 and t[2] == "-" and t[5] == "-" and t.replace("-", "").isdigit():
+            time_str = t.replace("-", ":")
+    if len(parts) >= 2:
+        camera = parts[1].replace("-", " ").replace("_", " ")
+    return {"name": filename, "time": time_str, "camera": camera}
+
+
 # ── Routes ──────────────────────────────────────────────────────────────────
 
 
 @app.route("/")
 def index():
-    """Landing page — list all recording dates."""
+    """Redirect to today's recordings if they exist, otherwise show landing page."""
+    today = _date.today().strftime("%Y-%m-%d")
+    if (ARCHIVE_DIR / today).is_dir():
+        return redirect(url_for("by_date", date_str=today))
     return render_template("index.html",
-                           dates=list_dates(), current_date=None, videos=[])
+                           dates=list_dates(), current_date=None, videos=[],
+                           dates_map=json.dumps(all_dates_map()))
 
 
 @app.route("/date/<date_str>")
@@ -107,9 +143,14 @@ def by_date(date_str: str):
     if not date_dir.resolve().is_relative_to(ARCHIVE_DIR.resolve()):
         abort(403)
 
-    videos = sorted((f.name for f in date_dir.iterdir() if f.suffix == ".mp4"), reverse=True)
+    videos = sorted(
+        (parse_video_meta(f.name) for f in date_dir.iterdir() if f.suffix == ".mp4"),
+        key=lambda v: v["name"],
+        reverse=True,
+    )
     return render_template("index.html",
-                           dates=list_dates(), current_date=date_str, videos=videos)
+                           dates=list_dates(), current_date=date_str, videos=videos,
+                           dates_map=json.dumps(all_dates_map()))
 
 
 @app.route("/video/<date_str>/<filename>")

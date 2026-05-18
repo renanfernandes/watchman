@@ -169,18 +169,269 @@
         .bulk-del { background: #3a1020; color: #e94560; }
         .bulk-del:hover { background: #5a1a30; }
         .sel-count { color: #888; margin-left: auto; font-size: 0.8rem; }
+
+        /* ── Desktop sidebar calendar ────────────────────────── */
+        .nav-cal {
+            padding: 0.5rem 0.25rem 0.25rem;
+            border-bottom: 1px solid #0f3460;
+            margin-bottom: 0.5rem;
+        }
+        .nav-cal-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #e0e0e0;
+            margin-bottom: 0.3rem;
+        }
+        .nav-cal-arr {
+            background: none;
+            border: none;
+            color: #e94560;
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 0 4px;
+            border-radius: 3px;
+            line-height: 1;
+        }
+        .nav-cal-arr:hover { background: #0f3460; }
+        .nav-cal-dow {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            text-align: center;
+            font-size: 0.55rem;
+            color: #555;
+            margin-bottom: 2px;
+        }
+        .nav-cal-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+        .nav-cal-cell {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            border-radius: 50%;
+            color: #3a3a5a;
+            user-select: none;
+        }
+        .nav-cal-cell.has {
+            color: #ccc;
+            font-weight: 600;
+            cursor: pointer;
+            position: relative;
+        }
+        .nav-cal-cell.has::after {
+            content: '';
+            position: absolute;
+            bottom: 1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 3px;
+            border-radius: 50%;
+            background: #e94560;
+        }
+        .nav-cal-cell.has:hover { background: #0f3460; }
+        .nav-cal-cell.sel {
+            background: #e94560;
+            color: #fff;
+            font-weight: 700;
+        }
+        .nav-cal-cell.sel::after { display: none; }
+        .nav-cal-cell.today:not(.sel) {
+            border: 1px solid #e94560;
+            color: #e94560;
+        }
+        .mob-fab,
+        .mob-sheet-overlay,
+        .mob-sheet {
+            display: none;
+        }
         @media (max-width: 768px) {
-            .layout { flex-direction: column; }
-            nav {
-                width: 100%;
-                border-right: none;
-                border-bottom: 1px solid #0f3460;
-                display: flex;
-                flex-wrap: wrap;
-                gap: 4px;
-            }
-            nav h2 { width: 100%; }
+            nav { display: none; }
             .video-grid { grid-template-columns: 1fr; }
+            main { padding: 1rem; padding-bottom: 5rem; }
+
+            /* Floating action button */
+            .mob-fab {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: fixed;
+                bottom: 1.25rem;
+                right: 1.25rem;
+                width: 52px;
+                height: 52px;
+                border-radius: 50%;
+                background: #e94560;
+                color: #fff;
+                font-size: 1.3rem;
+                border: none;
+                cursor: pointer;
+                box-shadow: 0 4px 16px rgba(233,69,96,0.5);
+                z-index: 100;
+            }
+
+            /* Sheet overlay */
+            .mob-sheet-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0,0,0,0.6);
+                z-index: 200;
+            }
+            .mob-sheet-overlay.open { display: block; }
+
+            /* Sheet panel slides up from bottom */
+            .mob-sheet {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                max-height: 70vh;
+                background: #16213e;
+                border-top: 2px solid #e94560;
+                border-radius: 18px 18px 0 0;
+                z-index: 300;
+                display: flex;
+                flex-direction: column;
+                transform: translateY(100%);
+                transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+            }
+            .mob-sheet.open { transform: translateY(0); }
+            .mob-sheet-handle {
+                width: 36px;
+                height: 4px;
+                background: #333;
+                border-radius: 2px;
+                margin: 0.6rem auto 0;
+                flex-shrink: 0;
+            }
+            .mob-sheet-title {
+                font-size: 0.75rem;
+                color: #888;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                padding: 0.5rem 1rem 0.25rem;
+                flex-shrink: 0;
+            }
+            .mob-sheet-body {
+                overflow-y: auto;
+                padding: 0.25rem 0 1rem;
+                flex: 1;
+            }
+            .mob-sheet-year {
+                font-size: 0.8rem;
+                font-weight: 700;
+                color: #e94560;
+                padding: 0.4rem 1rem 0.2rem;
+            }
+            .mob-sheet-month {
+                font-size: 0.7rem;
+                color: #666;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                padding: 0.2rem 1.25rem;
+            }
+            .mob-sheet-date {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.55rem 1.5rem;
+                font-size: 0.9rem;
+                color: #ccc;
+                text-decoration: none;
+                border-bottom: 1px solid #0f3460;
+            }
+            .mob-sheet-date:active { background: #0f3460; }
+            .mob-sheet-date.active { color: #e94560; font-weight: 700; }
+            .mob-sheet-date .cnt {
+                font-size: 0.72rem;
+                color: #888;
+                background: #0a0a1a;
+                padding: 1px 7px;
+                border-radius: 10px;
+            }
+            .mob-sheet-date.active .cnt { background: rgba(233,69,96,0.15); color: #e94560; }
+
+            /* Calendar inside sheet */
+            .mob-cal { padding: 0 0.75rem 0.75rem; }
+            .mob-cal-nav {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.5rem 0 0.4rem;
+                font-size: 0.95rem;
+                font-weight: 600;
+                color: #e0e0e0;
+            }
+            .mob-cal-arrow {
+                background: none;
+                border: none;
+                color: #e94560;
+                font-size: 1.3rem;
+                cursor: pointer;
+                padding: 0.1rem 0.5rem;
+                border-radius: 4px;
+                line-height: 1;
+            }
+            .mob-cal-arrow:active { background: #0f3460; }
+            .mob-cal-dow {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                text-align: center;
+                font-size: 0.62rem;
+                color: #555;
+                margin-bottom: 0.2rem;
+            }
+            .mob-cal-grid {
+                display: grid;
+                grid-template-columns: repeat(7, 1fr);
+                gap: 3px;
+            }
+            .mob-cal-day {
+                aspect-ratio: 1;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 0.82rem;
+                border-radius: 50%;
+                color: #444;
+                position: relative;
+                user-select: none;
+            }
+            .mob-cal-day.has-clips {
+                color: #e0e0e0;
+                font-weight: 600;
+                cursor: pointer;
+            }
+            .mob-cal-day.has-clips::after {
+                content: '';
+                position: absolute;
+                bottom: 2px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 3px;
+                height: 3px;
+                border-radius: 50%;
+                background: #e94560;
+            }
+            .mob-cal-day.has-clips:active { background: #0f3460; }
+            .mob-cal-day.selected {
+                background: #e94560;
+                color: #fff;
+                font-weight: 700;
+            }
+            .mob-cal-day.selected::after { display: none; }
+            .mob-cal-day.is-today:not(.selected) {
+                border: 1px solid #e94560;
+                color: #e94560;
+            }
         }
     </style>
 </head>
@@ -191,7 +442,19 @@
     </header>
     <div class="layout">
         <nav>
-            <h2>Recordings</h2>
+            <!-- Desktop calendar widget -->
+            <div class="nav-cal" id="nav-cal">
+                <div class="nav-cal-nav">
+                    <button class="nav-cal-arr" id="nav-cal-prev">&#8249;</button>
+                    <span id="nav-cal-title"></span>
+                    <button class="nav-cal-arr" id="nav-cal-next">&#8250;</button>
+                </div>
+                <div class="nav-cal-dow">
+                    <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+                </div>
+                <div class="nav-cal-grid" id="nav-cal-grid"></div>
+            </div>
+            <h2>All dates</h2>
             {% if dates %}
                 {% for year_group in dates %}
                 <div class="nav-year">
@@ -237,17 +500,21 @@
                     {% for video in videos %}
                     <div class="video-card">
                         <div class="video-check">
-                            <input type="checkbox" name="selected" value="{{ video }}" class="video-cb">
+                            <input type="checkbox" name="selected" value="{{ video.name }}" class="video-cb">
                         </div>
                         <video controls preload="metadata">
-                            <source src="/video/{{ current_date }}/{{ video }}" type="video/mp4">
+                            <source src="/video/{{ current_date }}/{{ video.name }}" type="video/mp4">
                         </video>
                         <div class="video-info">
-                            <span>{{ video }}</span>
+                            <span>
+                                {% if video.time %}<strong style="color:#e0e0e0">{{ video.time }}</strong>{% endif %}
+                                {% if video.camera %}<span style="color:#aaa"> &mdash; {{ video.camera }}</span>{% endif %}
+                                <br><span style="font-size:0.72rem;color:#555">{{ video.name }}</span>
+                            </span>
                             <div class="video-actions">
-                                <a href="/download/{{ current_date }}/{{ video }}">Download</a>
+                                <a href="/download/{{ current_date }}/{{ video.name }}">Download</a>
                                 <span style="color:#333">|</span>
-                                <button type="button" class="btn-delete" onclick="deleteSingle('{{ current_date }}', '{{ video }}')">Delete</button>
+                                <button type="button" class="btn-delete" onclick="deleteSingle('{{ current_date }}', '{{ video.name }}')">Delete</button>
                             </div>
                         </div>
                     </div>
@@ -262,6 +529,28 @@
             {% endif %}
         </main>
     </div>
+
+    <!-- ── Mobile FAB + sheet (hidden on desktop via CSS) ── -->
+    <button class="mob-fab" id="mob-fab" aria-label="Browse dates">📅</button>
+    <div class="mob-sheet-overlay" id="mob-overlay"></div>
+    <div class="mob-sheet" id="mob-sheet" role="dialog" aria-modal="true">
+        <div class="mob-sheet-handle"></div>
+        <div class="mob-sheet-title">Select a date</div>
+        <div class="mob-sheet-body">
+            <div class="mob-cal">
+                <div class="mob-cal-nav">
+                    <button class="mob-cal-arrow" id="mob-cal-prev">&#8249;</button>
+                    <span id="mob-cal-title"></span>
+                    <button class="mob-cal-arrow" id="mob-cal-next">&#8250;</button>
+                </div>
+                <div class="mob-cal-dow">
+                    <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+                </div>
+                <div class="mob-cal-grid" id="mob-cal-grid"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
         function toggleSection(header, bodyId) {
             const body = document.getElementById(bodyId);
@@ -293,6 +582,154 @@
             document.body.appendChild(f);
             f.submit();
         }
+
+        // Desktop sidebar calendar
+        (function () {
+            const datesMap = {{ dates_map|safe }};
+            const MONTHS = ['January','February','March','April','May','June',
+                            'July','August','September','October','November','December'];
+            const todayStr    = new Date().toISOString().slice(0, 10);
+            const selectedStr = '{{ current_date or "" }}';
+            const anchor = selectedStr || todayStr;
+            let viewYear  = parseInt(anchor.slice(0, 4));
+            let viewMonth = parseInt(anchor.slice(5, 7)) - 1;
+
+            function renderNav() {
+                document.getElementById('nav-cal-title').textContent =
+                    MONTHS[viewMonth].slice(0, 3) + ' ' + viewYear;
+                const grid = document.getElementById('nav-cal-grid');
+                if (!grid) return;
+                grid.innerHTML = '';
+                const firstDay    = new Date(viewYear, viewMonth, 1).getDay();
+                const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+                for (let i = 0; i < firstDay; i++) {
+                    grid.appendChild(document.createElement('div'));
+                }
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const ds = viewYear + '-' +
+                        String(viewMonth + 1).padStart(2, '0') + '-' +
+                        String(d).padStart(2, '0');
+                    const cell = document.createElement('div');
+                    const cls  = ['nav-cal-cell'];
+                    if (datesMap[ds])        cls.push('has');
+                    if (ds === selectedStr)  cls.push('sel');
+                    if (ds === todayStr && ds !== selectedStr) cls.push('today');
+                    cell.className = cls.join(' ');
+                    cell.textContent = d;
+                    if (datesMap[ds]) {
+                        cell.title = datesMap[ds] + ' clip' + (datesMap[ds] !== 1 ? 's' : '');
+                        cell.addEventListener('click', function () {
+                            window.location.href = '/date/' + ds;
+                        });
+                    }
+                    grid.appendChild(cell);
+                }
+            }
+
+            document.getElementById('nav-cal-prev').addEventListener('click', function () {
+                viewMonth--;
+                if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+                renderNav();
+            });
+            document.getElementById('nav-cal-next').addEventListener('click', function () {
+                viewMonth++;
+                if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+                renderNav();
+            });
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', renderNav);
+            } else {
+                renderNav();
+            }
+        })();
+
+        // Mobile calendar
+        (function () {
+            const datesMap = {{ dates_map|safe }};
+            const MONTHS = ['January','February','March','April','May','June',
+                            'July','August','September','October','November','December'];
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const selectedStr = '{{ current_date or "" }}';
+            const anchor = selectedStr || todayStr;
+            let viewYear  = parseInt(anchor.slice(0, 4));
+            let viewMonth = parseInt(anchor.slice(5, 7)) - 1;
+
+            function render() {
+                document.getElementById('mob-cal-title').textContent =
+                    MONTHS[viewMonth] + ' ' + viewYear;
+                const grid = document.getElementById('mob-cal-grid');
+                if (!grid) return;
+                grid.innerHTML = '';
+                const firstDay    = new Date(viewYear, viewMonth, 1).getDay();
+                const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+                for (let i = 0; i < firstDay; i++) {
+                    grid.appendChild(document.createElement('div'));
+                }
+                for (let d = 1; d <= daysInMonth; d++) {
+                    const ds = viewYear + '-' +
+                        String(viewMonth + 1).padStart(2, '0') + '-' +
+                        String(d).padStart(2, '0');
+                    const cell = document.createElement('div');
+                    const cls  = ['mob-cal-day'];
+                    if (datesMap[ds])     cls.push('has-clips');
+                    if (ds === selectedStr) cls.push('selected');
+                    if (ds === todayStr && ds !== selectedStr) cls.push('is-today');
+                    cell.className = cls.join(' ');
+                    cell.textContent = d;
+                    if (datesMap[ds]) {
+                        cell.addEventListener('click', function () {
+                            window.location.href = '/date/' + ds;
+                        });
+                    }
+                    grid.appendChild(cell);
+                }
+            }
+
+            document.getElementById('mob-cal-prev').addEventListener('click', function () {
+                viewMonth--;
+                if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+                render();
+            });
+            document.getElementById('mob-cal-next').addEventListener('click', function () {
+                viewMonth++;
+                if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+                render();
+            });
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', render);
+            } else {
+                render();
+            }
+        })();
+
+        // Mobile FAB sheet open/close
+        (function () {
+            const fab = document.getElementById('mob-fab');
+            const overlay = document.getElementById('mob-overlay');
+            const sheet = document.getElementById('mob-sheet');
+            if (!fab) return;
+            function openSheet() {
+                overlay.classList.add('open');
+                sheet.classList.add('open');
+                // scroll active date into view inside sheet
+                const active = sheet.querySelector('.mob-sheet-date.active');
+                if (active) active.scrollIntoView({ block: 'center' });
+            }
+            function closeSheet() {
+                overlay.classList.remove('open');
+                sheet.classList.remove('open');
+            }
+            fab.addEventListener('click', openSheet);
+            overlay.addEventListener('click', closeSheet);
+            // swipe down to close
+            let startY = 0;
+            sheet.addEventListener('touchstart', function(e) { startY = e.touches[0].clientY; }, { passive: true });
+            sheet.addEventListener('touchend', function(e) {
+                if (e.changedTouches[0].clientY - startY > 60) closeSheet();
+            }, { passive: true });
+        })();
 
         // On load: collapse all sections, then expand those containing the active link
         // or matching the current calendar month
