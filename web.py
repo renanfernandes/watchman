@@ -9,7 +9,9 @@ Usage:
 
 import argparse
 from pathlib import Path
-from flask import Flask, render_template, send_file, abort
+from flask import Flask, render_template, send_file, abort, request, redirect, url_for
+import io
+import zipfile
 
 app = Flask(__name__)
 ARCHIVE_DIR = Path("/home/watchman/archive")
@@ -138,6 +140,69 @@ def download_video(date_str: str, filename: str):
         abort(404)
 
     return send_file(video_path, as_attachment=True)
+
+
+@app.route("/delete/<date_str>/<filename>", methods=["POST"])
+def delete_video(date_str: str, filename: str):
+    """Delete a single video file."""
+    if not safe_date(date_str) or not safe_filename(filename):
+        abort(400)
+
+    video_path = ARCHIVE_DIR / date_str / filename
+    if not video_path.resolve().is_relative_to(ARCHIVE_DIR.resolve()):
+        abort(403)
+    if not video_path.exists() or video_path.suffix != ".mp4":
+        abort(404)
+
+    video_path.unlink()
+    date_dir = ARCHIVE_DIR / date_str
+    if date_dir.exists() and not any(date_dir.iterdir()):
+        date_dir.rmdir()
+
+    return redirect(url_for("by_date", date_str=date_str))
+
+
+@app.route("/bulk/<date_str>", methods=["POST"])
+def bulk_action(date_str: str):
+    """Bulk delete or download selected videos."""
+    if not safe_date(date_str):
+        abort(400)
+
+    action = request.form.get("action")
+    filenames = request.form.getlist("selected")
+
+    if not filenames:
+        return redirect(url_for("by_date", date_str=date_str))
+
+    for filename in filenames:
+        if not safe_filename(filename):
+            abort(400)
+        if not (ARCHIVE_DIR / date_str / filename).resolve().is_relative_to(ARCHIVE_DIR.resolve()):
+            abort(403)
+
+    if action == "delete":
+        for filename in filenames:
+            p = ARCHIVE_DIR / date_str / filename
+            if p.exists() and p.suffix == ".mp4":
+                p.unlink()
+        date_dir = ARCHIVE_DIR / date_str
+        if date_dir.exists() and not any(date_dir.iterdir()):
+            date_dir.rmdir()
+        return redirect(url_for("by_date", date_str=date_str))
+
+    elif action == "download":
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for filename in filenames:
+                p = ARCHIVE_DIR / date_str / filename
+                if p.exists() and p.suffix == ".mp4":
+                    zf.write(p, filename)
+        buf.seek(0)
+        return send_file(buf, as_attachment=True,
+                         download_name=f"watchman_{date_str}.zip",
+                         mimetype="application/zip")
+
+    abort(400)
 
 
 # ── Entry point ─────────────────────────────────────────────────────────────

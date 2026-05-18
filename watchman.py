@@ -146,6 +146,12 @@ def gadget_load(module: str, container: str) -> bool:
             "iProduct=USB_Drive",
         ])
         log.info("Gadget loaded")
+        # The Pi Zero 2 W shares its Broadcom SoC between USB and WiFi.
+        # Reloading the USB gadget module trips wpa_supplicant into re-enabling
+        # power management, which drops connectivity ~5 min later and triggers
+        # the net-watchdog reboot loop. Re-assert power save off every time.
+        run(["iw", "dev", "wlan0", "set", "power_save", "off"], check=False, timeout=5)
+        log.debug("WiFi power save re-asserted off after gadget load")
         return True
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
         log.error("Failed to load gadget: %s", e)
@@ -247,6 +253,16 @@ def archive_video(src: Path, archive_dir: Path) -> bool:
             counter += 1
 
         shutil.move(str(src), str(dest))
+
+        # Ensure the web app (non-root) can delete files
+        try:
+            import pwd
+            pw = pwd.getpwnam("watchman")
+            os.chown(dest, pw.pw_uid, pw.pw_gid)
+            os.chown(date_folder, pw.pw_uid, pw.pw_gid)
+        except Exception as e:
+            log.warning("Could not chown archived file: %s", e)
+
         log.info("Archived: %s -> %s", src.name, dest)
         return True
     except Exception as e:

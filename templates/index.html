@@ -122,13 +122,53 @@
             justify-content: space-between;
             align-items: center;
         }
-        .video-info span { font-size: 0.8rem; color: #aaa; }
-        .video-info a {
-            color: #e94560;
-            text-decoration: none;
+        .video-info span { font-size: 0.8rem; color: #aaa; flex: 1; }
+        .video-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .video-actions a { color: #e94560; text-decoration: none; font-size: 0.85rem; }
+        .video-actions a:hover { text-decoration: underline; }
+        .btn-delete {
+            color: #666;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-family: inherit;
+            padding: 0;
+        }
+        .btn-delete:hover { color: #e94560; text-decoration: underline; }
+        .video-check {
+            padding: 0.5rem 0.75rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: #666;
+        }
+        .bulk-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            padding: 0.6rem 0.75rem;
+            background: #16213e;
+            border-radius: 6px;
+            border: 1px solid #0f3460;
             font-size: 0.85rem;
         }
-        .video-info a:hover { text-decoration: underline; }
+        .bulk-bar label { color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 0.4rem; }
+        .bulk-bar button {
+            padding: 0.3rem 0.75rem;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-family: inherit;
+        }
+        .bulk-dl { background: #0f3460; color: #e0e0e0; }
+        .bulk-dl:hover { background: #1a4a8a; }
+        .bulk-del { background: #3a1020; color: #e94560; }
+        .bulk-del:hover { background: #5a1a30; }
+        .sel-count { color: #888; margin-left: auto; font-size: 0.8rem; }
         @media (max-width: 768px) {
             .layout { flex-direction: column; }
             nav {
@@ -186,19 +226,34 @@
             {% if current_date %}
                 <h2>{{ current_date }} &mdash; {{ videos|length }} clip{{ 's' if videos|length != 1 }}</h2>
                 {% if videos %}
+                <form id="bulk-form" method="POST" action="/bulk/{{ current_date }}">
+                <div class="bulk-bar">
+                    <label><input type="checkbox" id="select-all"> Select all</label>
+                    <button type="submit" name="action" value="download" class="bulk-dl">&#8595; Download selected</button>
+                    <button type="submit" name="action" value="delete" class="bulk-del" onclick="return confirmBulkDelete()">&#x1F5D1; Delete selected</button>
+                    <span class="sel-count" id="sel-count"></span>
+                </div>
                 <div class="video-grid">
                     {% for video in videos %}
                     <div class="video-card">
+                        <div class="video-check">
+                            <input type="checkbox" name="selected" value="{{ video }}" class="video-cb">
+                        </div>
                         <video controls preload="metadata">
                             <source src="/video/{{ current_date }}/{{ video }}" type="video/mp4">
                         </video>
                         <div class="video-info">
                             <span>{{ video }}</span>
-                            <a href="/download/{{ current_date }}/{{ video }}">Download</a>
+                            <div class="video-actions">
+                                <a href="/download/{{ current_date }}/{{ video }}">Download</a>
+                                <span style="color:#333">|</span>
+                                <button type="button" class="btn-delete" onclick="deleteSingle('{{ current_date }}', '{{ video }}')">Delete</button>
+                            </div>
                         </div>
                     </div>
                     {% endfor %}
                 </div>
+                </form>
                 {% else %}
                 <p class="empty">No clips for this date</p>
                 {% endif %}
@@ -212,6 +267,31 @@
             const body = document.getElementById(bodyId);
             const collapsed = body.classList.toggle('collapsed');
             header.classList.toggle('collapsed', collapsed);
+        }
+
+        function updateSelCount() {
+            const n = document.querySelectorAll('.video-cb:checked').length;
+            const el = document.getElementById('sel-count');
+            if (el) el.textContent = n ? n + ' selected' : '';
+        }
+        document.addEventListener('change', function(e) {
+            if (e.target.id === 'select-all') {
+                document.querySelectorAll('.video-cb').forEach(cb => cb.checked = e.target.checked);
+            }
+            updateSelCount();
+        });
+        function confirmBulkDelete() {
+            const n = document.querySelectorAll('.video-cb:checked').length;
+            if (n === 0) { alert('No videos selected.'); return false; }
+            return confirm('Delete ' + n + ' video' + (n > 1 ? 's' : '') + '? This cannot be undone.');
+        }
+        function deleteSingle(date, filename) {
+            if (!confirm('Delete ' + filename + '?')) return;
+            const f = document.createElement('form');
+            f.method = 'POST';
+            f.action = '/delete/' + date + '/' + filename;
+            document.body.appendChild(f);
+            f.submit();
         }
 
         // On load: collapse all sections, then expand those containing the active link
