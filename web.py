@@ -9,11 +9,20 @@ Usage:
 
 import argparse
 import json
-from datetime import date as _date
+from datetime import date as _date, datetime as _datetime, timezone as _tz
 from pathlib import Path
+from zoneinfo import ZoneInfo as _ZoneInfo
 from flask import Flask, render_template, send_file, abort, request, redirect, url_for
 import io
 import zipfile
+
+def _local_tz():
+    tz_file = Path("/etc/timezone")
+    if tz_file.exists():
+        return _ZoneInfo(tz_file.read_text().strip())
+    return _ZoneInfo("UTC")
+
+_LOCAL_TZ = _local_tz()
 
 app = Flask(__name__)
 ARCHIVE_DIR = Path("/home/watchman/archive")
@@ -111,7 +120,8 @@ def parse_video_meta(filename: str) -> dict:
     if len(parts) >= 1:
         t = parts[0]  # "13-38-41"
         if len(t) == 8 and t[2] == "-" and t[5] == "-" and t.replace("-", "").isdigit():
-            time_str = t.replace("-", ":")
+            utc_dt = _datetime(2000, 1, 1, int(t[0:2]), int(t[3:5]), int(t[6:8]), tzinfo=_tz.utc)
+            time_str = utc_dt.astimezone(_LOCAL_TZ).strftime("%H:%M:%S")
     if len(parts) >= 2:
         camera = parts[1].replace("-", " ").replace("_", " ")
     return {"name": filename, "time": time_str, "camera": camera}
