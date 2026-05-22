@@ -23,11 +23,11 @@ rsync -avz -e "$RSYNC_SSH" --exclude='.git' --exclude='logs/' --exclude='.troubl
 
 echo ""
 echo "[2/3] Installing + restarting services..."
-ssh "$HOST" 'sudo cp ~/watchman/watchman.py ~/watchman/web.py ~/watchman/net-watchdog.sh ~/watchman/watchman-startup.sh /opt/watchman/ \
+ssh "$HOST" 'sudo cp ~/watchman/watchman.py ~/watchman/web.py ~/watchman/scripts/net-watchdog.sh ~/watchman/scripts/watchman-startup.sh /opt/watchman/ \
   && sudo chmod +x /opt/watchman/net-watchdog.sh /opt/watchman/watchman-startup.sh \
   && sudo cp -r ~/watchman/templates /opt/watchman/ \
   && sudo cp ~/watchman/watchman.conf /etc/watchman/watchman.conf \
-  && sudo cp ~/watchman/watchman.service ~/watchman/watchman-web.service ~/watchman/watchman-net.service ~/watchman/watchman-startup.service /etc/systemd/system/ \
+  && sudo cp ~/watchman/services/watchman.service ~/watchman/services/watchman-web.service ~/watchman/services/watchman-net.service ~/watchman/services/watchman-startup.service /etc/systemd/system/ \
   && sudo systemctl daemon-reload \
   && sudo systemctl enable watchman-startup.service watchman-net.service \
   && sudo systemctl restart watchman watchman-web \

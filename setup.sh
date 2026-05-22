@@ -114,8 +114,8 @@ mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
 cp "$SCRIPT_DIR/watchman.py" "$INSTALL_DIR/"
 cp "$SCRIPT_DIR/web.py" "$INSTALL_DIR/"
 cp -r "$SCRIPT_DIR/templates" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/net-watchdog.sh" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/watchman-startup.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/scripts/net-watchdog.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/scripts/watchman-startup.sh" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/watchman.py" "$INSTALL_DIR/web.py" "$INSTALL_DIR/net-watchdog.sh" "$INSTALL_DIR/watchman-startup.sh"
 
 # Only install config if it doesn't already exist (don't overwrite user edits)
@@ -150,7 +150,7 @@ fi
 if [ -f "$CONTAINER" ]; then
     echo "  Container already exists: $CONTAINER (skipping)"
 else
-    bash "$SCRIPT_DIR/create_disk.sh" "$CONFIG_FILE"
+    bash "$SCRIPT_DIR/scripts/create_disk.sh" "$CONFIG_FILE"
 fi
 
 echo "[OK] GhostDrive ready"
@@ -186,9 +186,9 @@ echo ""
 
 echo "[7/9] Installing systemd services..."
 
-cp "$SCRIPT_DIR/watchman.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/watchman-web.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/watchman-startup.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/services/watchman.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/services/watchman-web.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/services/watchman-startup.service" /etc/systemd/system/
 
 systemctl daemon-reload
 systemctl enable watchman.service watchman-web.service watchman-startup.service
@@ -235,9 +235,9 @@ if [ -f "$CONFIG_FILE" ]; then
     done < <(grep -v '^\s*#' "$CONFIG_FILE" | grep '=')
 fi
 
-cp "$SCRIPT_DIR/net-watchdog.sh" "$INSTALL_DIR/"
+cp "$SCRIPT_DIR/scripts/net-watchdog.sh" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/net-watchdog.sh"
-cp "$SCRIPT_DIR/watchman-net.service" /etc/systemd/system/
+cp "$SCRIPT_DIR/services/watchman-net.service" /etc/systemd/system/
 systemctl daemon-reload
 
 if [ "$NET_WATCHDOG_ENABLED" = "yes" ]; then
