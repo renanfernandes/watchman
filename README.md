@@ -53,21 +53,32 @@ the Blink Sync Module's USB port.
 
 ## Quick Setup
 
+### First-time installation (run on the Pi)
+
+SSH into your Pi, clone the repo, and run the setup script:
+
 ```bash
-# 1. Clone this repo onto your Pi
+ssh watchman@<pi-ip>
 git clone <your-repo-url> ~/watchman
 cd ~/watchman
-
-# 2. Run the setup script
 sudo bash setup.sh
-
-# 3. Reboot to activate USB gadget mode
 sudo reboot
 ```
 
-After reboot, both services start automatically:
+`setup.sh` installs all dependencies, configures USB gadget mode, creates the virtual disk, and enables all services. After reboot everything starts automatically:
 - **Watchman** monitors and archives clips
 - **Web UI** available at `http://<pi-ip>:5000`
+
+### Deploying updates (run from your Mac)
+
+After making changes to the code, push them to the Pi from your Mac:
+
+```bash
+bash deploy.sh                    # uses default host watchman@10.2.0.5
+bash deploy.sh watchman@10.2.0.5  # or specify a different host
+```
+
+`deploy.sh` rsyncs the repo to the Pi, installs updated files to `/opt/watchman/`, and restarts the services.
 
 ## Boot Configuration (What setup.sh Does)
 
@@ -205,25 +216,13 @@ PUSHOVER_USER=your_user_key_here
 
 ## Web Interface
 
+![Watchman Web Interface](watchman.png)
+
 Browse to `http://<pi-ip>:5000` to:
 
 - **Browse** recordings organised by **year → month → day** in a collapsible sidebar
 - **Play** clips directly in your browser (newest clip shown first for each day)
 - **Download** individual clips
-
-## Deploying Updates
-
-From your development machine (requires SSH access to the Pi):
-
-```bash
-bash deploy.sh                    # uses default host watchman@10.0.1.244
-bash deploy.sh watchman@10.2.0.5  # or specify a different host
-```
-
-The script:
-1. Rsyncs all project files to `~/watchman/` on the Pi
-2. Copies `watchman.py`, `web.py`, and `templates/` to `/opt/watchman/`
-3. Restarts both systemd services (`watchman` and `watchman-web`)
 
 ## Checking Logs
 
