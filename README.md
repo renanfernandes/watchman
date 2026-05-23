@@ -8,6 +8,8 @@ Watchman makes a Raspberry Pi (in my case the Zero 2 W) act as a virtual USB dri
 Blink Sync Module 2. Intercepts motion-triggered `.mp4` clips and archives them
 locally for remote access — no Blink subscription needed.
 
+![Watchman Web Interface](watchman.png)
+
 ## How It Works
 
 ```
@@ -215,8 +217,6 @@ PUSHOVER_USER=your_user_key_here
 ```
 
 ## Web Interface
-
-![Watchman Web Interface](watchman.png)
 
 Browse to `http://<pi-ip>:5000` to:
 
