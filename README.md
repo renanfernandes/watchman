@@ -71,18 +71,7 @@ sudo reboot
 - **Watchman** monitors and archives clips
 - **Web UI** available at `http://<pi-ip>:5000`
 
-### Deploying updates (run from your Mac)
-
-After making changes to the code, push them to the Pi from your Mac:
-
-```bash
-bash deploy.sh                    # uses default host watchman@10.2.0.5
-bash deploy.sh watchman@10.2.0.5  # or specify a different host
-```
-
-`deploy.sh` rsyncs the repo to the Pi, installs updated files to `/opt/watchman/`, and restarts the services.
-
-## Boot Configuration (What setup.sh Does)
+## Boot Configuration (What setup.sh Does ?)
 
 The Pi needs two boot file changes to act as a USB gadget device. `setup.sh`
 handles this automatically, but here's exactly what it does:
@@ -210,7 +199,7 @@ Watchman can send push notifications via [Pushover](https://pushover.net) when:
 3. Copy your **user key** from the dashboard
 4. Add both to `watchman.conf`:
 
-```ini
+   ```ini
 NOTIFY_ENABLED=yes
 PUSHOVER_TOKEN=your_app_token_here
 PUSHOVER_USER=your_user_key_here

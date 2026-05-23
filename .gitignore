@@ -6,7 +6,9 @@ __pycache__/
 *.log
 watchman.conf
 
+
 # Personal troubleshooting — not part of the project
 troubleshoot.sh
+deploy.sh
 notify-when-online.sh
 logs/
