@@ -6,7 +6,7 @@
 Watchman is a elegant solution to a problem I had: How to properly access and manage the recordings from my Blink Cameras without an active subscription? 
 Watchman makes a Raspberry Pi (in my case the Zero 2 W) act as a virtual USB drive ("GhostDrive") for a
 Blink Sync Module 2. Intercepts motion-triggered `.mp4` clips and archives them
-locally for remote access — no Blink subscription needed.
+locally for remote access: **no Blink subscription needed.**
 
 ![Watchman Web Interface](watchman.png)
 
