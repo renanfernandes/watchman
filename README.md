@@ -29,12 +29,17 @@ Blink Camera → Sync Module 2 → [Pi Zero 2W as USB Drive] → Archive → Web
 | `web.py` | Web interface — browse/play/download archived videos |
 | `templates/index.html` | Web UI template |
 | `watchman.conf` | All configuration in one place |
-| `create_disk.sh` | Creates the 6GB exFAT virtual disk |
 | `setup.sh` | Full automated setup (deps, boot, disk, services) |
-| `net-watchdog.sh` | Network watchdog — reboots Pi if internet is lost too long |
-| `watchman.service` | systemd unit for the ingest service |
-| `watchman-web.service` | systemd unit for the web interface |
-| `watchman-net.service` | systemd unit for the network watchdog |
+| `deploy.sh` | Deploy updates from your Mac to the Pi |
+| `troubleshoot.sh` | Remote diagnostics and log collection |
+| `scripts/create_disk.sh` | Creates the 6GB exFAT virtual disk |
+| `scripts/net-watchdog.sh` | Network watchdog — reboots Pi if internet is lost too long |
+| `scripts/watchman-startup.sh` | Boot diagnostics and Pushover notification |
+| `scripts/notify-when-online.sh` | Sends a Pushover notification when the Pi comes online |
+| `services/watchman.service` | systemd unit for the ingest service |
+| `services/watchman-web.service` | systemd unit for the web interface |
+| `services/watchman-net.service` | systemd unit for the network watchdog |
+| `services/watchman-startup.service` | systemd unit for the boot startup script |
 
 ## Hardware
 
@@ -123,7 +128,7 @@ sudo sed -i 's/rootwait/rootwait modules-load=dwc2/' /boot/cmdline.txt
 ### 3. Create the virtual disk
 
 ```bash
-sudo bash create_disk.sh
+sudo bash scripts/create_disk.sh
 ```
 
 Or manually:
@@ -151,7 +156,7 @@ sudo python3 watchman.py --once --no-gadget --verbose
 ### 5. Install services
 
 ```bash
-sudo cp watchman.service watchman-web.service /etc/systemd/system/
+sudo cp services/watchman.service services/watchman-web.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now watchman.service watchman-web.service
 ```
