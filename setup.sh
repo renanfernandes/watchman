@@ -120,7 +120,16 @@ chmod +x "$INSTALL_DIR/watchman.py" "$INSTALL_DIR/web.py" "$INSTALL_DIR/net-watc
 
 # Only install config if it doesn't already exist (don't overwrite user edits)
 if [ ! -f "$CONFIG_FILE" ]; then
-    cp "$SCRIPT_DIR/watchman.conf" "$CONFIG_FILE"
+    if [ -f "$SCRIPT_DIR/watchman.conf" ]; then
+        cp "$SCRIPT_DIR/watchman.conf" "$CONFIG_FILE"
+    elif [ -f "$SCRIPT_DIR/watchman.conf.example" ]; then
+        cp "$SCRIPT_DIR/watchman.conf.example" "$CONFIG_FILE"
+        echo "  WARNING: No watchman.conf found — installed from watchman.conf.example"
+        echo "  Review $CONFIG_FILE and set your Pushover credentials before use."
+    else
+        echo "[ERROR] No config file found. Expected $SCRIPT_DIR/watchman.conf or watchman.conf.example"
+        exit 1
+    fi
     echo "  Config installed to $CONFIG_FILE"
 else
     echo "  Config already exists at $CONFIG_FILE (not overwriting)"

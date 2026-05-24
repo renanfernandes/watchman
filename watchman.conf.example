@@ -1,5 +1,16 @@
 # Watchman Configuration
-# Edit these values for your setup.
+#
+# !! REVIEW BEFORE USE !!
+# This file was copied from watchman.conf.example during setup.
+# At minimum, check the following before starting the service:
+#
+#   1. ARCHIVE_DIR  — must point to a directory owned by the user running Watchman.
+#                     Default assumes a "watchman" user. Change if your user is different.
+#
+#   2. PUSHOVER_TOKEN / PUSHOVER_USER  — required if NOTIFY_ENABLED=yes.
+#                     Get your credentials at https://pushover.net
+#
+#   3. NOTIFY_ENABLED — set to "no" if you don't want push notifications.
 
 # ── GhostDrive ──────────────────────────────────────────────
 
@@ -14,7 +25,8 @@ MOUNT_POINT=/mnt/ghostdrive
 
 # ── Archive ─────────────────────────────────────────────────
 
-# Where videos are permanently stored
+# Where videos are permanently stored.
+# !! Change this if your user is not "watchman" (e.g. /home/pi/archive)
 ARCHIVE_DIR=/home/watchman/archive
 
 # ── USB Gadget ──────────────────────────────────────────────

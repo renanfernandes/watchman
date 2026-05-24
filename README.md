@@ -89,6 +89,12 @@ sudo bash setup.sh
 sudo reboot
 ```
 
+> **After setup, before rebooting:** review `/etc/watchman/watchman.conf` and update any values for your environment — especially `ARCHIVE_DIR` (change `/home/watchman` to your actual home directory if your user is different) and `PUSHOVER_TOKEN` / `PUSHOVER_USER` if you want push notifications.
+>
+> ```bash
+> sudo nano /etc/watchman/watchman.conf
+> ```
+
 `setup.sh` installs all dependencies, configures USB gadget mode, creates the virtual disk, and enables all services. After reboot everything starts automatically:
 - **Watchman** monitors and archives clips
 - **Web UI** available at `http://<pi-ip>:5000`
