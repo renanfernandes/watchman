@@ -97,6 +97,13 @@ Once the Pi is back online, open a browser and go to `http://<pi-ip>:5000` to ac
 
 ![Watchman Web Interface](watchman.png)
 
+
+---
+
+## Technical Details
+
+> You don't need to read this to use Watchman. It's here if you want to understand how things work under the hood.
+
 ## Boot Configuration (What setup.sh Does ?)
 
 The Pi needs two boot file changes to act as a USB gadget device. `setup.sh`
