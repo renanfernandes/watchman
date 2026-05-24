@@ -48,12 +48,34 @@ Blink Camera → Sync Module 2 → [Pi Zero 2W as USB Drive] → Archive → Web
 - Raspberry Pi Zero 2 W (or any Raspberry Pi, honestly)
 - MicroSD card (16GB+ recommended)
 - USB data cable (micro-USB to USB-A) connecting Pi to Blink Sync Module 2
-- Power supply for the Pi
+- Power supply for the Pi (USB-C or micro-USB wall adapter, depending on your Pi model)
 
-**Important:** Connect the Pi's **data** micro-USB port (not the power port) to
-the Blink Sync Module's USB port.
+### Physical Connections
+
+The Pi Zero 2 W has **two** micro-USB ports on the board edge — make sure you use the right one for each role:
+
+```
+  [PWR] ──────────────────── Wall adapter / power bank
+  [USB] ──────────────────── Blink Sync Module 2  ← USB-A port on the Sync Module
+```
+
+| Pi Zero 2 W port | Label on board | Connect to |
+|---|---|---|
+| Left micro-USB | `PWR IN` | Power supply (wall adapter or power bank) |
+| Right micro-USB | `USB` | USB-A port on the Blink Sync Module 2 |
+
+> **Why does the port matter?**  
+> Only the `USB` port supports OTG/gadget mode, which lets the Pi pretend to be
+> a USB flash drive. The `PWR IN` port is power-only and won't work for data.
+
+The **Blink Sync Module 2** has a single USB-A port on its back panel — that's
+where the cable from the Pi's `USB` port goes. The Sync Module gets its own
+power via its included power adapter; the Pi does **not** draw power from the
+Sync Module.
 
 ## Quick Setup
+
+> **Before you begin:** Make sure the Pi is physically connected to the Blink Sync Module 2 and powered. See the [Hardware](#hardware) section for wiring details.
 
 ### First-time installation (run on the Pi)
 
@@ -61,7 +83,7 @@ SSH into your Pi, clone the repo, and run the setup script:
 
 ```bash
 ssh watchman@<pi-ip>
-git clone <your-repo-url> ~/watchman
+git clone https://github.com/renanfernandes/watchman.git ~/watchman
 cd ~/watchman
 sudo bash setup.sh
 sudo reboot
@@ -70,6 +92,10 @@ sudo reboot
 `setup.sh` installs all dependencies, configures USB gadget mode, creates the virtual disk, and enables all services. After reboot everything starts automatically:
 - **Watchman** monitors and archives clips
 - **Web UI** available at `http://<pi-ip>:5000`
+
+Once the Pi is back online, open a browser and go to `http://<pi-ip>:5000` to access the Web UI. You should see your archived clips ready to browse, play, and download.
+
+![Watchman Web Interface](watchman.png)
 
 ## Boot Configuration (What setup.sh Does ?)
 
