@@ -30,6 +30,7 @@ Blink Camera → Sync Module 2 → [Pi Zero 2W as USB Drive] → Archive → Web
 | `watchman.py` | Main service — detects, ingests, and archives clips |
 | `web.py` | Web interface — browse/play/download archived videos |
 | `templates/index.html` | Web UI template |
+| `templates/settings.html` | Web settings page (retention + cleanup tools) |
 | `watchman.conf` | All configuration in one place |
 | `setup.sh` | Full automated setup (deps, boot, disk, services) |
 | `deploy.sh` | Deploy updates from your Mac to the Pi |
@@ -211,7 +212,7 @@ All settings live in `watchman.conf` (installed to `/etc/watchman/watchman.conf`
 | `CONTAINER` | `/ghostdrive.bin` | Path to the virtual disk file |
 | `CONTAINER_SIZE_MB` | `6144` | Disk size (only used during creation) |
 | `MOUNT_POINT` | `/mnt/ghostdrive` | Temporary mount location |
-| `ARCHIVE_DIR` | `/home/pi/archive` | Where videos are permanently stored |
+| `ARCHIVE_DIR` | `/home/watchman/archive` | Where videos are permanently stored |
 | `GADGET_MODULE` | `g_mass_storage` | Kernel module name |
 | `SETTLE_TIME` | `60` | Seconds to wait after last write before cycling |
 | `MIN_INTERVAL` | `300` | Minimum seconds between ingest cycles |
@@ -219,6 +220,10 @@ All settings live in `watchman.conf` (installed to `/etc/watchman/watchman.conf`
 | `WATCHDOG_THRESHOLD` | `3` | Failures before attempting USB reset |
 | `WEB_HOST` | `0.0.0.0` | Web server bind address |
 | `WEB_PORT` | `5000` | Web server port |
+| `RETENTION_MODE` | `off` | Retention behavior: `off`, `archive`, or `delete` |
+| `RETENTION_DAYS` | `90` | Only clips older than this many days are eligible |
+| `RETENTION_ARCHIVE_DIR` | _(empty)_ | Destination root for archive mode |
+| `RETENTION_RUN_INTERVAL` | `3600` | Seconds between automatic retention checks |
 | `NET_WATCHDOG_ENABLED` | `yes` | Enable/disable the network watchdog (`yes`/`no`) |
 | `NET_WATCHDOG_HOST` | `8.8.8.8` | Host to ping to verify internet connectivity |
 | `NET_WATCHDOG_TIMEOUT` | `300` | Seconds offline before rebooting (default: 5 min) |
@@ -251,6 +256,21 @@ Browse to `http://<pi-ip>:5000` to:
 - **Browse** recordings organised by **year → month → day** in a collapsible sidebar
 - **Play** clips directly in your browser (newest clip shown first for each day)
 - **Download** individual clips
+- **Open Settings** from the top bar to configure retention
+- **Retention mode**: `off` / `archive` / `delete`
+- **Run cleanup now** and see status output
+- **Estimate cleanup impact** by threshold (files + MB/GiB)
+- **Calendar indicators**:
+   - red dot = clips currently exist for that date
+   - yellow dot = clips existed in the past and were archived/deleted
+
+In archive mode, old clips are moved to:
+
+```
+<RETENTION_ARCHIVE_DIR>/YYYY-MM-DD/*.mp4
+```
+
+If a filename already exists, Watchman appends a numeric suffix (`_1`, `_2`, ...).
 
 ## Checking Logs
 
@@ -282,6 +302,17 @@ sudo journalctl -u watchman-net -f
 - Check logs: `sudo journalctl -u watchman -n 50`
 - Verify config: `cat /etc/watchman/watchman.conf`
 - Test manually: `sudo python3 /opt/watchman/watchman.py --once --verbose`
+
+**Settings save fails with permission error:**
+- Ensure the web service user can write `/etc/watchman/watchman.conf`:
+
+```bash
+sudo chown root:watchman /etc/watchman/watchman.conf
+sudo chmod 660 /etc/watchman/watchman.conf
+sudo -u watchman test -w /etc/watchman/watchman.conf && echo "watchman can write"
+```
+
+- `deploy.sh` applies these permissions automatically during deploy.
 
 ## Future Plans
 
