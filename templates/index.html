@@ -21,6 +21,19 @@
         }
         header h1 { font-size: 1.4rem; color: #e94560; }
         header span { font-size: 0.85rem; color: #666; }
+        .header-spacer { margin-left: auto; }
+        .header-link {
+            color: #aaa;
+            text-decoration: none;
+            font-size: 0.82rem;
+            border: 1px solid #0f3460;
+            border-radius: 5px;
+            padding: 0.25rem 0.55rem;
+        }
+        .header-link:hover {
+            color: #e0e0e0;
+            background: #0f3460;
+        }
         .layout {
             display: flex;
             min-height: calc(100vh - 58px);
@@ -164,6 +177,88 @@
             font-size: 0.8rem;
             font-family: inherit;
         }
+        .settings-card {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        .settings-card h3 {
+            font-size: 0.95rem;
+            color: #e0e0e0;
+            margin-bottom: 0.5rem;
+        }
+        .settings-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+            margin-bottom: 0.6rem;
+        }
+        .settings-row label {
+            font-size: 0.82rem;
+            color: #aaa;
+        }
+        .settings-row select,
+        .settings-row input {
+            background: #0a0a1a;
+            color: #e0e0e0;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            padding: 0.35rem 0.45rem;
+            font-size: 0.82rem;
+            min-width: 110px;
+        }
+        .settings-row input[type="text"] { min-width: 280px; }
+        .settings-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .btn-settings {
+            padding: 0.35rem 0.75rem;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-family: inherit;
+        }
+        .btn-save { background: #0f3460; color: #e0e0e0; }
+        .btn-save:hover { background: #1a4a8a; }
+        .btn-run { background: #3a1020; color: #e94560; }
+        .btn-run:hover { background: #5a1a30; }
+        .status-msg {
+            font-size: 0.8rem;
+            color: #89d185;
+            margin-top: 0.35rem;
+        }
+        .settings-help {
+            font-size: 0.75rem;
+            color: #777;
+            margin-top: 0.35rem;
+        }
+        .cal-legend {
+            margin-top: 0.5rem;
+            display: flex;
+            gap: 0.9rem;
+            flex-wrap: wrap;
+            font-size: 0.75rem;
+            color: #999;
+        }
+        .cal-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .cal-legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .cal-legend-dot.live { background: #e94560; }
+        .cal-legend-dot.historical { background: #f2c94c; }
         .bulk-dl { background: #0f3460; color: #e0e0e0; }
         .bulk-dl:hover { background: #1a4a8a; }
         .bulk-del { background: #3a1020; color: #e94560; }
@@ -235,6 +330,22 @@
             height: 3px;
             border-radius: 50%;
             background: #e94560;
+        }
+        .nav-cal-cell.had {
+            color: #c7c7a5;
+            font-weight: 600;
+            position: relative;
+        }
+        .nav-cal-cell.had::after {
+            content: '';
+            position: absolute;
+            bottom: 1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 3px;
+            border-radius: 50%;
+            background: #f2c94c;
         }
         .nav-cal-cell.has:hover { background: #0f3460; }
         .nav-cal-cell.sel {
@@ -421,6 +532,21 @@
                 border-radius: 50%;
                 background: #e94560;
             }
+            .mob-cal-day.had-clips {
+                color: #c7c7a5;
+                font-weight: 600;
+            }
+            .mob-cal-day.had-clips::after {
+                content: '';
+                position: absolute;
+                bottom: 2px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 3px;
+                height: 3px;
+                border-radius: 50%;
+                background: #f2c94c;
+            }
             .mob-cal-day.has-clips:active { background: #0f3460; }
             .mob-cal-day.selected {
                 background: #e94560;
@@ -439,6 +565,8 @@
     <header>
         <h1>Watchman</h1>
         <span>Blink Clip Archive</span>
+        <span class="header-spacer"></span>
+        <a href="/settings" class="header-link">Settings</a>
     </header>
     <div class="layout">
         <nav>
@@ -609,18 +737,24 @@
                     const ds = viewYear + '-' +
                         String(viewMonth + 1).padStart(2, '0') + '-' +
                         String(d).padStart(2, '0');
+                    const state = datesMap[ds] || null;
+                    const hasCurrent = !!(state && state.count > 0);
+                    const hasHistory = !!(state && state.had_old);
                     const cell = document.createElement('div');
                     const cls  = ['nav-cal-cell'];
-                    if (datesMap[ds])        cls.push('has');
+                    if (hasCurrent)      cls.push('has');
+                    else if (hasHistory) cls.push('had');
                     if (ds === selectedStr)  cls.push('sel');
                     if (ds === todayStr && ds !== selectedStr) cls.push('today');
                     cell.className = cls.join(' ');
                     cell.textContent = d;
-                    if (datesMap[ds]) {
-                        cell.title = datesMap[ds] + ' clip' + (datesMap[ds] !== 1 ? 's' : '');
+                    if (hasCurrent) {
+                        cell.title = state.count + ' clip' + (state.count !== 1 ? 's' : '');
                         cell.addEventListener('click', function () {
                             window.location.href = '/date/' + ds;
                         });
+                    } else if (hasHistory) {
+                        cell.title = 'Clips were archived/deleted for this date';
                     }
                     grid.appendChild(cell);
                 }
@@ -670,14 +804,18 @@
                     const ds = viewYear + '-' +
                         String(viewMonth + 1).padStart(2, '0') + '-' +
                         String(d).padStart(2, '0');
+                    const state = datesMap[ds] || null;
+                    const hasCurrent = !!(state && state.count > 0);
+                    const hasHistory = !!(state && state.had_old);
                     const cell = document.createElement('div');
                     const cls  = ['mob-cal-day'];
-                    if (datesMap[ds])     cls.push('has-clips');
+                    if (hasCurrent)      cls.push('has-clips');
+                    else if (hasHistory) cls.push('had-clips');
                     if (ds === selectedStr) cls.push('selected');
                     if (ds === todayStr && ds !== selectedStr) cls.push('is-today');
                     cell.className = cls.join(' ');
                     cell.textContent = d;
-                    if (datesMap[ds]) {
+                    if (hasCurrent) {
                         cell.addEventListener('click', function () {
                             window.location.href = '/date/' + ds;
                         });

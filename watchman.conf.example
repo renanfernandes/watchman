@@ -57,6 +57,22 @@ WATCHDOG_THRESHOLD=3
 WEB_HOST=0.0.0.0
 WEB_PORT=5000
 
+# ── Retention / Auto Cleanup ───────────────────────────────────────────────
+
+# off     = keep everything
+# archive = move old clips from ARCHIVE_DIR to RETENTION_ARCHIVE_DIR
+# delete  = permanently remove old clips from ARCHIVE_DIR
+RETENTION_MODE=off
+
+# Clips older than this number of days are processed by retention mode
+RETENTION_DAYS=30
+
+# Destination folder used only when RETENTION_MODE=archive
+RETENTION_ARCHIVE_DIR=
+
+# Minimum seconds between automatic retention runs in web.py
+RETENTION_RUN_INTERVAL=3600
+
 # ── Network Watchdog ─────────────────────────────────────────────────────────
 
 # Set to "no" to disable without removing the service

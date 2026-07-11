@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watchman Settings</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        header {
+            background: #16213e;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #0f3460;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        header h1 { font-size: 1.4rem; color: #e94560; }
+        header span { font-size: 0.85rem; color: #666; }
+        .header-spacer { margin-left: auto; }
+        .header-link {
+            color: #aaa;
+            text-decoration: none;
+            font-size: 0.82rem;
+            border: 1px solid #0f3460;
+            border-radius: 5px;
+            padding: 0.25rem 0.55rem;
+        }
+        .header-link:hover {
+            color: #e0e0e0;
+            background: #0f3460;
+        }
+        main {
+            max-width: 900px;
+            margin: 1.5rem auto;
+            padding: 0 1rem;
+        }
+        .settings-card {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 0.9rem;
+            margin-bottom: 1rem;
+        }
+        .settings-card h2 {
+            font-size: 1rem;
+            color: #e0e0e0;
+            margin-bottom: 0.6rem;
+        }
+        .settings-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+            margin-bottom: 0.6rem;
+        }
+        .settings-row label {
+            font-size: 0.82rem;
+            color: #aaa;
+        }
+        .settings-row select,
+        .settings-row input {
+            background: #0a0a1a;
+            color: #e0e0e0;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            padding: 0.35rem 0.45rem;
+            font-size: 0.82rem;
+            min-width: 110px;
+        }
+        .settings-row input[type="text"] { min-width: 300px; }
+        .settings-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .btn-settings {
+            padding: 0.35rem 0.75rem;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-family: inherit;
+        }
+        .btn-save { background: #0f3460; color: #e0e0e0; }
+        .btn-save:hover { background: #1a4a8a; }
+        .btn-run { background: #3a1020; color: #e94560; }
+        .btn-run:hover { background: #5a1a30; }
+        .status-msg {
+            font-size: 0.8rem;
+            color: #89d185;
+            margin-top: 0.5rem;
+        }
+        .settings-help {
+            font-size: 0.75rem;
+            color: #777;
+            margin-top: 0.5rem;
+        }
+        .estimate-box {
+            margin-top: 0.6rem;
+            padding: 0.55rem 0.65rem;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            background: #0f1b35;
+            font-size: 0.8rem;
+            color: #b9c7e8;
+        }
+        .estimate-box strong { color: #e0e0e0; }
+        .estimate-meta {
+            margin-top: 0.35rem;
+            font-size: 0.75rem;
+            color: #93a6d6;
+        }
+        .cal-legend {
+            margin-top: 0.5rem;
+            display: flex;
+            gap: 0.9rem;
+            flex-wrap: wrap;
+            font-size: 0.75rem;
+            color: #999;
+        }
+        .cal-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+        .cal-legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .cal-legend-dot.live { background: #e94560; }
+        .cal-legend-dot.historical { background: #f2c94c; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Watchman</h1>
+        <span>Settings</span>
+        <span class="header-spacer"></span>
+        <a href="/" class="header-link">Back to Clips</a>
+    </header>
+
+    <main>
+        <div class="settings-card">
+            <h2>Retention Settings</h2>
+            <form method="POST" action="/settings/retention">
+                <div class="settings-row">
+                    <label for="retention_mode">Mode</label>
+                    <select id="retention_mode" name="retention_mode">
+                        <option value="off" {% if settings.mode == 'off' %}selected{% endif %}>Off</option>
+                        <option value="archive" {% if settings.mode == 'archive' %}selected{% endif %}>Archive old clips</option>
+                        <option value="delete" {% if settings.mode == 'delete' %}selected{% endif %}>Delete old clips</option>
+                    </select>
+                    <label for="retention_days">Older than (days)</label>
+                    <input id="retention_days" name="retention_days" type="number" min="1" value="{{ settings.days }}">
+                </div>
+                <div class="settings-row">
+                    <label for="retention_archive_dir">Archive destination</label>
+                    <input id="retention_archive_dir" name="retention_archive_dir" type="text" value="{{ settings.archive_dir }}" placeholder="/path/to/archive/folder">
+                </div>
+                <div class="settings-actions">
+                    <button type="submit" class="btn-settings btn-save">Save settings</button>
+                </div>
+            </form>
+            <form method="POST" action="/settings/retention/run" style="margin-top:0.5rem;">
+                <div class="settings-actions">
+                    <button type="submit" class="btn-settings btn-run">Run cleanup now</button>
+                </div>
+            </form>
+                <p class="settings-help">Run cleanup now uses the currently saved settings. If you changed values above, click Save settings first.</p>
+            <div class="estimate-box" id="cleanup-estimate" aria-live="polite">
+                <span id="cleanup-estimate-summary">Estimated cleanup now: <strong>{{ estimate.files }}</strong> file{{ 's' if estimate.files != 1 }} (<strong>{{ estimate.size_text }}</strong>)</span>
+                <div class="estimate-meta" id="cleanup-oldest">
+                    {% if estimate.oldest_clip_date %}
+                        Oldest clip found: <strong>{{ estimate.oldest_clip_date }}</strong> ({{ estimate.oldest_clip_age_days }} days old). Cleanup threshold: older than {{ estimate.days }} days (before {{ estimate.cutoff_date }}).
+                    {% else %}
+                        No clips found in the active archive.
+                    {% endif %}
+                </div>
+            </div>
+            <div class="cal-legend" aria-label="Calendar status legend">
+                <span class="cal-legend-item"><span class="cal-legend-dot live"></span>Current clips exist</span>
+                <span class="cal-legend-item"><span class="cal-legend-dot historical"></span>Clips archived/deleted</span>
+            </div>
+            <p class="settings-help">Archive mode moves clips older than the selected days to the destination folder. Delete mode permanently removes clips older than the selected days.</p>
+            {% if status_message %}<p class="status-msg">{{ status_message }}</p>{% endif %}
+        </div>
+    </main>
+
+    <script>
+        (function () {
+            const daysInput = document.getElementById('retention_days');
+            const estimateEl = document.getElementById('cleanup-estimate');
+            const summaryEl = document.getElementById('cleanup-estimate-summary');
+            const oldestEl = document.getElementById('cleanup-oldest');
+            if (!daysInput || !estimateEl) return;
+
+            let timer = null;
+
+            function renderEstimate(data) {
+                const files = Number(data.files || 0);
+                const mb = Number(data.mb || 0);
+                const gb = Number(data.gb || 0);
+                const sizeText = mb >= 1024 ? gb.toFixed(2) + ' GiB' : mb.toFixed(2) + ' MB';
+                const suffix = files === 1 ? '' : 's';
+                if (summaryEl) {
+                    summaryEl.innerHTML =
+                    'Estimated cleanup now: <strong>' + files + '</strong> file' + suffix +
+                    ' (<strong>' + sizeText + '</strong>)';
+                }
+
+                if (!oldestEl) return;
+                const oldestDate = data.oldest_clip_date || null;
+                const oldestAge = Number(data.oldest_clip_age_days || 0);
+                const days = Number(data.days || 90);
+                const cutoff = data.cutoff_date || 'unknown';
+                if (!oldestDate) {
+                    oldestEl.textContent = 'No clips found in the active archive.';
+                    return;
+                }
+
+                let text =
+                    'Oldest clip found: ' + oldestDate +
+                    ' (' + oldestAge + ' days old). ' +
+                    'Cleanup threshold: older than ' + days + ' days (before ' + cutoff + ').';
+
+                if (files === 0) {
+                    text += ' No clips currently match this threshold.';
+                }
+                oldestEl.textContent = text;
+            }
+
+            function fetchEstimate() {
+                const value = parseInt(daysInput.value, 10);
+                const days = Number.isFinite(value) && value > 0 ? value : 90;
+                fetch('/settings/retention/estimate?days=' + encodeURIComponent(days), {
+                    headers: { 'Accept': 'application/json' }
+                })
+                    .then(function (resp) {
+                        if (!resp.ok) throw new Error('request failed');
+                        return resp.json();
+                    })
+                    .then(renderEstimate)
+                    .catch(function () {
+                        estimateEl.textContent = 'Estimated cleanup now: unavailable';
+                    });
+            }
+
+            daysInput.addEventListener('input', function () {
+                if (timer) window.clearTimeout(timer);
+                timer = window.setTimeout(fetchEstimate, 250);
+            });
+        })();
+    </script>
+</body>
+</html>
