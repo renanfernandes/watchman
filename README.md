@@ -1,4 +1,4 @@
-![commit](https://img.shields.io/github/last-commit/renanfernandes/watchman)
+![commit](https://img.shields.io/github/last-commit/shiwoonyi/watchman)
 # Watchman
 
 > Read the full write-up: [Blink Vibe-Coded Raspberry Pi](https://renanm.com/blog/blink-vibe-coded-raspberry-pi/)
