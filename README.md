@@ -434,9 +434,9 @@ Watchman can send push notifications via [Pushover](https://pushover.net) when:
 2. Create a new application to get an **API token**
 3. Copy your **user key** from the dashboard
 4. Add both to `watchman.conf`, or enter them on the web UI's **Settings**
-   page (which also has a **Send test notification** button):
+   page (which also has a **Send test notification** button)
 
-   ```ini
+```ini
 NOTIFY_ENABLED=yes
 PUSHOVER_TOKEN=your_app_token_here
 PUSHOVER_USER=your_user_key_here
