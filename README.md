@@ -49,7 +49,7 @@ Blink Camera → Sync Module 2 → [Pi Zero 2W as USB Drive] → Archive → Web
 
 ## Hardware
 
-- Raspberry Pi Zero 2 W (or any Raspberry Pi, honestly) — **or a Raspberry Pi 5**,
+- Raspberry Pi Zero 2 W (or any Raspberry Pi, honestly) — **If a Raspberry Pi 5**,
   see [Raspberry Pi 5 Notes](#raspberry-pi-5-notes) below for extra setup steps
   and quirks specific to that board
 - MicroSD card (16GB+ recommended) — or an **NVMe HAT** (optional) if using a
