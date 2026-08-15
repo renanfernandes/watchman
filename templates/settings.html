@@ -308,6 +308,45 @@
         </div>
 
         <div class="settings-card">
+            <h2>Timing &amp; Watchdog</h2>
+            <form method="POST" action="/settings/timing" class="ajax-form">
+                <div class="settings-row">
+                    <label for="settle_time">Settle time (seconds)</label>
+                    <input id="settle_time" name="settle_time" type="number" min="10" value="{{ timing.settle_time }}">
+                </div>
+                <div class="settings-row">
+                    <label for="min_interval">Min interval between cycles (seconds)</label>
+                    <input id="min_interval" name="min_interval" type="number" min="60" value="{{ timing.min_interval }}">
+                </div>
+                <div class="settings-row">
+                    <label for="net_watchdog_enabled">
+                        <input type="checkbox" id="net_watchdog_enabled" name="net_watchdog_enabled"
+                               {% if timing.net_watchdog_enabled %}checked{% endif %}>
+                        Enable network watchdog (auto-reboot on connectivity loss)
+                    </label>
+                </div>
+                <div class="settings-row">
+                    <label for="net_watchdog_timeout">Reboot after offline for (seconds)</label>
+                    <input id="net_watchdog_timeout" name="net_watchdog_timeout" type="number" min="60" value="{{ timing.net_watchdog_timeout }}">
+                </div>
+                <div class="settings-actions">
+                    <button type="submit" class="btn-settings btn-save">Save settings</button>
+                </div>
+            </form>
+            <p class="settings-help">
+                <strong>Settle time</strong> — how long Watchman waits after the last write to the
+                virtual drive before ingesting clips. Lower values ingest sooner; too low may catch
+                incomplete writes.<br>
+                <strong>Min interval</strong> — minimum gap between ingest cycles even if new
+                writes are detected, to avoid cycling too frequently.<br>
+                <strong>Network watchdog</strong> — if the Pi loses internet connectivity for
+                longer than the timeout, it reboots automatically to recover. Disable during
+                maintenance to prevent unexpected reboots. Changes take effect after restarting
+                the Network Watchdog service below.
+            </p>
+        </div>
+
+        <div class="settings-card">
             <h2>Service Status</h2>
             <div class="settings-actions" style="margin-bottom:0.6rem;">
                 <button type="button" id="check-status-btn" class="btn-settings btn-run">Check status</button>

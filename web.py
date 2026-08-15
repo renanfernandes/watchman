@@ -110,6 +110,10 @@ def load_config(path: str) -> dict:
         "PUSHOVER_TOKEN": "",
         "PUSHOVER_USER": "",
         "VIDEO_PRELOAD": "none",
+        "SETTLE_TIME": "120",
+        "MIN_INTERVAL": "1800",
+        "NET_WATCHDOG_ENABLED": "yes",
+        "NET_WATCHDOG_TIMEOUT": "600",
     }
     if not Path(path).exists():
         return config
@@ -203,6 +207,17 @@ def video_settings() -> dict:
     if preload not in {"none", "metadata"}:
         preload = "none"
     return {"preload": preload}
+
+
+def timing_settings() -> dict:
+    """Read ingest timing and network watchdog settings from config file."""
+    cfg = load_config(CONFIG_PATH)
+    return {
+        "settle_time": parse_positive_int(cfg.get("SETTLE_TIME", "120"), 120),
+        "min_interval": parse_positive_int(cfg.get("MIN_INTERVAL", "1800"), 1800),
+        "net_watchdog_enabled": cfg.get("NET_WATCHDOG_ENABLED", "yes").strip().lower() in {"yes", "true", "1"},
+        "net_watchdog_timeout": parse_positive_int(cfg.get("NET_WATCHDOG_TIMEOUT", "600"), 600),
+    }
 
 
 def get_services_status() -> str:
@@ -764,6 +779,7 @@ def settings_page():
     nc_settings = nextcloud_settings()
     notif_settings = notify_settings()
     vid_settings = video_settings()
+    timing = timing_settings()
     return render_template(
         "settings.html",
         settings=settings,
@@ -771,6 +787,7 @@ def settings_page():
         nextcloud=nc_settings,
         notify=notif_settings,
         video=vid_settings,
+        timing=timing,
         status_message=request.args.get("msg", ""),
     )
 
@@ -939,6 +956,34 @@ def save_video_settings():
             )
         )
     return redirect(url_for("settings_page", msg="Video settings saved."))
+
+
+@app.route("/settings/timing", methods=["POST"])
+def save_timing_settings():
+    """Persist ingest timing and network watchdog settings."""
+    settle_time = parse_positive_int(request.form.get("settle_time", "120"), 120)
+    min_interval = parse_positive_int(request.form.get("min_interval", "1800"), 1800)
+    net_watchdog_enabled = "yes" if request.form.get("net_watchdog_enabled") == "on" else "no"
+    net_watchdog_timeout = parse_positive_int(request.form.get("net_watchdog_timeout", "600"), 600)
+
+    try:
+        update_config(
+            CONFIG_PATH,
+            {
+                "SETTLE_TIME": str(settle_time),
+                "MIN_INTERVAL": str(min_interval),
+                "NET_WATCHDOG_ENABLED": net_watchdog_enabled,
+                "NET_WATCHDOG_TIMEOUT": str(net_watchdog_timeout),
+            },
+        )
+    except OSError:
+        return redirect(
+            url_for(
+                "settings_page",
+                msg=f"Could not save settings (check write permissions for config file: {CONFIG_PATH}).",
+            )
+        )
+    return redirect(url_for("settings_page", msg="Timing & Watchdog settings saved."))
 
 
 # Only these exact units can be restarted from the web UI — never accept an
