@@ -9,6 +9,10 @@ Usage:
 
 import argparse
 import json
+import logging
+import subprocess
+import threading
+import time
 from datetime import date as _date, datetime as _datetime, timedelta as _timedelta, timezone as _tz
 from pathlib import Path
 from zoneinfo import ZoneInfo as _ZoneInfo
@@ -16,6 +20,9 @@ from flask import Flask, render_template, send_file, abort, request, redirect, u
 import io
 import shutil
 import zipfile
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 
 def _local_tz():
     tz_file = Path("/etc/timezone")
@@ -25,11 +32,65 @@ def _local_tz():
 
 _LOCAL_TZ = _local_tz()
 
+log = logging.getLogger("watchman-web")
+
 app = Flask(__name__)
 ARCHIVE_DIR = Path("/home/watchman/archive")
 CONFIG_PATH = "watchman.conf"
 RETENTION_STATE_FILE = Path("/tmp/watchman_retention_state.json")
 RETENTION_HISTORY_FILE = Path("/tmp/watchman_retention_history.json")
+
+
+@app.before_request
+def _reject_cross_origin_writes():
+    """Block cross-site request forgery on any state-changing request.
+
+    Two independent layers, since either alone can have gaps:
+
+    1. Origin/Referer check — browsers automatically attach an Origin header
+       to POST/PUT/DELETE/PATCH requests, including plain HTML form
+       submissions, so this catches forged requests from a different site
+       with no changes needed to any form.
+
+    2. Custom header check — every legitimate form on this site submits via
+       fetch() with an X-Requested-With header (see the JS in index.html and
+       settings.html). A plain HTML <form> — the classic CSRF vector, e.g. a
+       hidden auto-submitting form on some other page — has no way to set a
+       custom header at all, so this rejects anything that isn't going
+       through our own JS, even if Origin/Referer were somehow spoofed.
+    """
+    if request.method not in ("POST", "PUT", "DELETE", "PATCH"):
+        return None
+
+    origin = request.headers.get("Origin")
+    source = origin
+    if not source:
+        # Older browsers/some HTTP clients may omit Origin — fall back to
+        # Referer, which is also sent on real same-site form submissions.
+        source = request.headers.get("Referer")
+
+    if not source:
+        # No Origin and no Referer on a state-changing request is unusual
+        # enough (real browsers send at least one) to treat as suspicious.
+        log.warning("Blocked %s %s — no Origin/Referer header present", request.method, request.path)
+        abort(403)
+
+    try:
+        source_host = urlparse(source).netloc
+    except Exception:
+        source_host = ""
+
+    if source_host != request.host:
+        log.warning("Blocked %s %s — Origin/Referer host '%s' != request host '%s'",
+                    request.method, request.path, source_host, request.host)
+        abort(403)
+
+    if request.headers.get("X-Requested-With") != "XMLHttpRequest":
+        log.warning("Blocked %s %s — missing X-Requested-With header (not our own JS)",
+                    request.method, request.path)
+        abort(403)
+
+    return None
 
 
 def load_config(path: str) -> dict:
@@ -42,6 +103,13 @@ def load_config(path: str) -> dict:
         "RETENTION_DAYS": "90",
         "RETENTION_ARCHIVE_DIR": "",
         "RETENTION_RUN_INTERVAL": "3600",
+        "NEXTCLOUD_ENABLED": "no",
+        "NEXTCLOUD_REMOTE": "",
+        "NEXTCLOUD_RCLONE_PATH": "rclone",
+        "NOTIFY_ENABLED": "no",
+        "PUSHOVER_TOKEN": "",
+        "PUSHOVER_USER": "",
+        "VIDEO_PRELOAD": "none",
     }
     if not Path(path).exists():
         return config
@@ -102,6 +170,143 @@ def retention_settings() -> dict:
         "archive_dir": cfg.get("RETENTION_ARCHIVE_DIR", "").strip(),
         "interval": parse_positive_int(cfg.get("RETENTION_RUN_INTERVAL", "3600"), 3600),
     }
+
+
+def nextcloud_settings() -> dict:
+    """Read Nextcloud/rclone sync settings from config file."""
+    cfg = load_config(CONFIG_PATH)
+    enabled = cfg.get("NEXTCLOUD_ENABLED", "no").strip().lower() in {"yes", "true", "1"}
+    return {
+        "enabled": enabled,
+        "remote": cfg.get("NEXTCLOUD_REMOTE", "").strip(),
+        "rclone_path": cfg.get("NEXTCLOUD_RCLONE_PATH", "rclone").strip() or "rclone",
+    }
+
+
+def notify_settings() -> dict:
+    """Read Pushover notification settings from config file."""
+    cfg = load_config(CONFIG_PATH)
+    enabled = cfg.get("NOTIFY_ENABLED", "no").strip().lower() in {"yes", "true", "1"}
+    return {
+        "enabled": enabled,
+        "token": cfg.get("PUSHOVER_TOKEN", "").strip(),
+        "user": cfg.get("PUSHOVER_USER", "").strip(),
+    }
+
+
+def video_settings() -> dict:
+    """Read video playback settings (preload behavior) from config file."""
+    cfg = load_config(CONFIG_PATH)
+    preload = cfg.get("VIDEO_PRELOAD", "none").strip().lower()
+    # "auto" is disabled for now (see save_video_settings) — treat any
+    # existing config value of "auto" as "none" rather than rendering it.
+    if preload not in {"none", "metadata"}:
+        preload = "none"
+    return {"preload": preload}
+
+
+def get_services_status() -> str:
+    """Return `systemctl status` output for Watchman's core services."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "status", "watchman.service", "watchman-web.service", "--no-pager"],
+            capture_output=True, text=True, timeout=10,
+        )
+        output = (result.stdout or "") + (("\n" + result.stderr) if result.stderr else "")
+        return output.strip() or "No status output returned."
+    except Exception as e:
+        return f"Could not retrieve service status: {e}"
+
+
+def pushover_notify(title: str, message: str, priority: int = 0) -> None:
+    """Send a push notification via Pushover, if enabled and configured."""
+    settings = notify_settings()
+    if not settings["enabled"] or not settings["token"] or not settings["user"]:
+        return
+    try:
+        data = urlencode({
+            "token": settings["token"],
+            "user": settings["user"],
+            "title": title,
+            "message": message,
+            "priority": priority,
+        }).encode()
+        req = Request("https://api.pushover.net/1/messages.json", data=data)
+        urlopen(req, timeout=10)
+    except URLError as e:
+        log.warning("Pushover notification failed: %s", e)
+    except Exception as e:
+        log.warning("Pushover notification error: %s", e)
+
+
+def nextcloud_upload_and_verify(folder: Path, year: str, month: str) -> bool:
+    """
+    Ship one date folder's clips to Nextcloud via rclone, using the same
+    year/month/day naming the archive already uses, then verify the remote
+    copy matches before retention is allowed to delete anything locally.
+
+    rclone creates the remote year/month/day folders automatically if they
+    don't exist yet. Returns True only when the upload is confirmed complete
+    (or when Nextcloud sync isn't enabled, so retention behaves as before).
+    """
+    settings = nextcloud_settings()
+    if not settings["enabled"]:
+        return True
+
+    if not settings["remote"]:
+        log.error("NEXTCLOUD_ENABLED=yes but NEXTCLOUD_REMOTE is not set — skipping upload for %s", folder.name)
+        pushover_notify("Watchman — Nextcloud Config Error",
+                         "NEXTCLOUD_ENABLED=yes but NEXTCLOUD_REMOTE is not set.", priority=1)
+        return False
+
+    rclone = settings["rclone_path"]
+    remote_path = f"{settings['remote']}/{year}/{month}/{folder.name}"
+
+    try:
+        subprocess.run(
+            [rclone, "copy", str(folder), remote_path, "--checksum"],
+            check=True, timeout=3600, capture_output=True, text=True,
+        )
+    except FileNotFoundError:
+        log.error("rclone binary not found (%s) — cannot ship %s to Nextcloud", rclone, folder.name)
+        pushover_notify("Watchman — Nextcloud Upload Failed",
+                         f"rclone binary not found — cannot ship {folder.name}.", priority=1)
+        return False
+    except subprocess.TimeoutExpired:
+        log.error("rclone copy timed out for %s", folder.name)
+        pushover_notify("Watchman — Nextcloud Upload Failed",
+                         f"rclone copy timed out for {folder.name}.", priority=1)
+        return False
+    except subprocess.CalledProcessError as e:
+        log.error("rclone copy failed for %s: %s", folder.name, e.stderr.strip() if e.stderr else e)
+        pushover_notify("Watchman — Nextcloud Upload Failed",
+                         f"rclone copy failed for {folder.name}.", priority=1)
+        return False
+
+    # Double-check: compare local files against what actually landed on
+    # Nextcloud (size + checksum) before this folder is allowed to be deleted.
+    try:
+        check = subprocess.run(
+            [rclone, "check", str(folder), remote_path, "--one-way"],
+            timeout=600, capture_output=True, text=True,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        log.error("rclone check failed for %s: %s", folder.name, e)
+        pushover_notify("Watchman — Nextcloud Verify Failed",
+                         f"rclone check failed for {folder.name}.", priority=1)
+        return False
+
+    if check.returncode != 0:
+        log.warning(
+            "Nextcloud verification failed for %s (rclone check exit %d) — will retry next run: %s",
+            folder.name, check.returncode, check.stderr.strip() if check.stderr else "",
+        )
+        pushover_notify("Watchman — Nextcloud Verify Failed",
+                         f"Verification failed for {folder.name} — will retry next run.", priority=1)
+        return False
+
+    log.info("Verified %s uploaded to Nextcloud at %s", folder.name, remote_path)
+    return True
 
 
 def should_run_retention(interval_seconds: int) -> bool:
@@ -233,6 +438,19 @@ def run_retention_cleanup(force: bool = False) -> dict:
             result["errors"] += 1
             continue
 
+        # Before permanently deleting anything, ship this folder's footage
+        # to Nextcloud and verify it landed intact. If it's not enabled,
+        # this is a no-op and behaves exactly as before.
+        if settings["mode"] == "delete":
+            year, month, _day = folder.name.split("-")
+            if not nextcloud_upload_and_verify(folder, year, month):
+                log.warning(
+                    "Skipping deletion of %s — Nextcloud upload not verified yet",
+                    folder.name,
+                )
+                result["errors"] += 1
+                continue
+
         for clip in clips:
             if clip.suffix != ".mp4" or not clip.is_file():
                 continue
@@ -263,6 +481,21 @@ def run_retention_cleanup(force: bool = False) -> dict:
             record_retention_event(date_str, "archived", events["archived"])
         if events["deleted"] > 0:
             record_retention_event(date_str, "deleted", events["deleted"])
+
+    if result["deleted"] > 0 or result["moved"] > 0 or result["errors"] > 0:
+        parts = []
+        if result["deleted"] > 0:
+            parts.append(f"{result['deleted']} deleted")
+        if result["moved"] > 0:
+            parts.append(f"{result['moved']} archived to {target_dir}")
+        if result["errors"] > 0:
+            parts.append(f"{result['errors']} error(s)")
+        pushover_notify(
+            "Watchman — Retention Cleanup",
+            ", ".join(parts) + ".",
+            priority=1 if result["errors"] > 0 else 0,
+        )
+
     return result
 
 
@@ -430,8 +663,20 @@ def safe_filename(filename: str) -> bool:
     return ".." not in filename and "/" not in filename and "\\" not in filename
 
 
-def parse_video_meta(filename: str) -> dict:
-    """Extract time and camera name from Blink filename (HH-MM-SS_Camera_NNN.mp4)."""
+def parse_video_meta(filename: str, ref_date: _date | None = None, date_str: str | None = None) -> dict:
+    """Extract time, camera name, and (if available) duration for a clip.
+
+    ref_date should be the clip's actual recording date (not a fixed stand-in
+    date), since the UTC->local conversion depends on which DST era applies —
+    using a fixed winter date would always resolve to standard time even for
+    clips recorded during daylight saving time, shifting the displayed time
+    by an hour.
+
+    Duration is read from a small JSON sidecar generated by ffprobe at ingest
+    time (see probe_video_meta() in watchman.py) — this gives the same
+    "know before you press play" info that preload="metadata" would, without
+    ever making the browser request the video file itself.
+    """
     stem = Path(filename).stem  # e.g. "13-38-41_DoorbellFront_001"
     parts = stem.split("_", 2)
     time_str = ""
@@ -439,11 +684,25 @@ def parse_video_meta(filename: str) -> dict:
     if len(parts) >= 1:
         t = parts[0]  # "13-38-41"
         if len(t) == 8 and t[2] == "-" and t[5] == "-" and t.replace("-", "").isdigit():
-            utc_dt = _datetime(2000, 1, 1, int(t[0:2]), int(t[3:5]), int(t[6:8]), tzinfo=_tz.utc)
+            d = ref_date or _date.today()
+            utc_dt = _datetime(d.year, d.month, d.day, int(t[0:2]), int(t[3:5]), int(t[6:8]), tzinfo=_tz.utc)
             time_str = utc_dt.astimezone(_LOCAL_TZ).strftime("%H:%M:%S")
     if len(parts) >= 2:
         camera = parts[1].replace("-", " ").replace("_", " ")
-    return {"name": filename, "time": time_str, "camera": camera}
+
+    duration_str = ""
+    if date_str:
+        meta_path = ARCHIVE_DIR / ".thumbnails" / date_str / f"{stem}.json"
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+                secs = int(round(float(meta.get("duration") or 0)))
+                if secs > 0:
+                    duration_str = f"{secs // 60}:{secs % 60:02d}"
+            except Exception:
+                pass
+
+    return {"name": filename, "time": time_str, "camera": camera, "duration": duration_str}
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
@@ -461,6 +720,7 @@ def index():
                            dates=list_dates(), current_date=None, videos=[],
                            dates_map=json.dumps(calendar_status_map()),
                            settings=settings,
+                           video_preload=video_settings()["preload"],
                            status_message=request.args.get("msg", ""))
 
 
@@ -478,27 +738,39 @@ def by_date(date_str: str):
     if not date_dir.resolve().is_relative_to(ARCHIVE_DIR.resolve()):
         abort(403)
 
+    try:
+        folder_date = _date.fromisoformat(date_str)
+    except ValueError:
+        folder_date = _date.today()
+
     videos = sorted(
-        (parse_video_meta(f.name) for f in date_dir.iterdir() if f.suffix == ".mp4"),
-        key=lambda v: v["name"],
+        (parse_video_meta(f.name, folder_date, date_str) for f in date_dir.iterdir() if f.suffix == ".mp4"),
+        key=lambda v: (v["time"] or "", v["name"]),
         reverse=True,
     )
     return render_template("index.html",
                            dates=list_dates(), current_date=date_str, videos=videos,
                            dates_map=json.dumps(calendar_status_map()),
                            settings=settings,
+                           video_preload=video_settings()["preload"],
                            status_message=request.args.get("msg", ""))
 
 
 @app.route("/settings")
 def settings_page():
-    """Show retention settings page."""
+    """Show retention, Nextcloud, notification, and video settings page."""
     settings = retention_settings()
     estimate = retention_cleanup_estimate(settings["days"])
+    nc_settings = nextcloud_settings()
+    notif_settings = notify_settings()
+    vid_settings = video_settings()
     return render_template(
         "settings.html",
         settings=settings,
         estimate=estimate,
+        nextcloud=nc_settings,
+        notify=notif_settings,
+        video=vid_settings,
         status_message=request.args.get("msg", ""),
     )
 
@@ -580,6 +852,141 @@ def run_retention_now():
             f"checked={checked}, moved={moved}, deleted={deleted}, errors={errors}"
         )
     return redirect(url_for("settings_page", msg=msg))
+
+
+@app.route("/settings/nextcloud", methods=["POST"])
+def save_nextcloud_settings():
+    """Persist Nextcloud/rclone sync settings."""
+    enabled = "yes" if request.form.get("nextcloud_enabled") == "on" else "no"
+    remote = request.form.get("nextcloud_remote", "").strip()
+    rclone_path = request.form.get("nextcloud_rclone_path", "").strip() or "rclone"
+
+    try:
+        update_config(
+            CONFIG_PATH,
+            {
+                "NEXTCLOUD_ENABLED": enabled,
+                "NEXTCLOUD_REMOTE": remote,
+                "NEXTCLOUD_RCLONE_PATH": rclone_path,
+            },
+        )
+    except OSError:
+        return redirect(
+            url_for(
+                "settings_page",
+                msg=f"Could not save settings (check write permissions for config file: {CONFIG_PATH}).",
+            )
+        )
+    return redirect(url_for("settings_page", msg="Nextcloud settings saved."))
+
+
+@app.route("/settings/notifications", methods=["POST"])
+def save_notification_settings():
+    """Persist Pushover notification settings."""
+    enabled = "yes" if request.form.get("notify_enabled") == "on" else "no"
+    token = request.form.get("pushover_token", "").strip()
+    user = request.form.get("pushover_user", "").strip()
+
+    try:
+        update_config(
+            CONFIG_PATH,
+            {
+                "NOTIFY_ENABLED": enabled,
+                "PUSHOVER_TOKEN": token,
+                "PUSHOVER_USER": user,
+            },
+        )
+    except OSError:
+        return redirect(
+            url_for(
+                "settings_page",
+                msg=f"Could not save settings (check write permissions for config file: {CONFIG_PATH}).",
+            )
+        )
+    return redirect(url_for("settings_page", msg="Notification settings saved."))
+
+
+@app.route("/settings/notifications/test", methods=["POST"])
+def test_notification():
+    """Send a test Pushover notification using the currently saved settings."""
+    settings = notify_settings()
+    if not settings["enabled"]:
+        return redirect(url_for("settings_page", msg="Notifications are disabled — enable and save first."))
+    if not settings["token"] or not settings["user"]:
+        return redirect(url_for("settings_page", msg="Set and save your Pushover token/user key first."))
+
+    pushover_notify("Watchman — Test Notification", "This is a test notification from Watchman.")
+    return redirect(url_for("settings_page", msg="Test notification sent — check your device."))
+
+
+@app.route("/settings/video", methods=["POST"])
+def save_video_settings():
+    """Persist video preload setting."""
+    preload = request.form.get("video_preload", "none").strip().lower()
+    # "auto" is disabled in the UI (root cause of a separate crash still
+    # unconfirmed pending a hardware fix) — reject it server-side too, since
+    # the disabled <option> attribute alone wouldn't stop a direct POST.
+    if preload not in {"none", "metadata"}:
+        preload = "none"
+
+    try:
+        update_config(CONFIG_PATH, {"VIDEO_PRELOAD": preload})
+    except OSError:
+        return redirect(
+            url_for(
+                "settings_page",
+                msg=f"Could not save settings (check write permissions for config file: {CONFIG_PATH}).",
+            )
+        )
+    return redirect(url_for("settings_page", msg="Video settings saved."))
+
+
+# Only these exact units can be restarted from the web UI — never accept an
+# arbitrary service name here.
+RESTARTABLE_SERVICES = {"watchman", "watchman-web", "watchman-net", "watchman-startup"}
+
+
+@app.route("/services/status")
+def services_status_api():
+    """Return live `systemctl status` output, fetched on demand by the button."""
+    return get_services_status(), 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+@app.route("/services/restart/<service>", methods=["POST"])
+def restart_service(service: str):
+    """Restart one of Watchman's own systemd services."""
+    if service not in RESTARTABLE_SERVICES:
+        abort(400)
+    unit = f"{service}.service"
+
+    def _do_restart():
+        # Small delay so this HTTP response (and the redirect) actually
+        # reaches the browser before the process — possibly this very one,
+        # for watchman-web — gets restarted.
+        time.sleep(1)
+        try:
+            subprocess.run(["sudo", "-n", "systemctl", "restart", unit],
+                            check=True, timeout=30, capture_output=True)
+        except Exception as e:
+            log.error("Failed to restart %s: %s", unit, e)
+
+    threading.Thread(target=_do_restart, daemon=True).start()
+    return redirect(url_for("settings_page", msg=f"Restarting {unit}…"))
+
+
+@app.route("/thumbnail/<date_str>/<filename>")
+def serve_thumbnail(date_str: str, filename: str):
+    """Serve a cached thumbnail image for a clip, or a placeholder if missing."""
+    if not safe_date(date_str) or not safe_filename(filename):
+        abort(400)
+
+    thumb_path = ARCHIVE_DIR / ".thumbnails" / date_str / (Path(filename).stem + ".jpg")
+    if not thumb_path.resolve().is_relative_to(ARCHIVE_DIR.resolve()):
+        abort(403)
+    if not thumb_path.exists():
+        abort(404)
+
+    return send_file(thumb_path, mimetype="image/jpeg")
 
 
 @app.route("/video/<date_str>/<filename>")

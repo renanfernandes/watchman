@@ -101,6 +101,20 @@
             color: #777;
             margin-top: 0.5rem;
         }
+        .status-box {
+            background: #0a0a1a;
+            border: 1px solid #0f3460;
+            border-radius: 6px;
+            padding: 0.7rem;
+            max-height: 260px;
+            overflow-y: auto;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            font-size: 0.72rem;
+            line-height: 1.5;
+            color: #ccc;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
         .estimate-box {
             margin-top: 0.6rem;
             padding: 0.55rem 0.65rem;
@@ -150,7 +164,7 @@
     <main>
         <div class="settings-card">
             <h2>Retention Settings</h2>
-            <form method="POST" action="/settings/retention">
+            <form method="POST" action="/settings/retention" class="ajax-form">
                 <div class="settings-row">
                     <label for="retention_mode">Mode</label>
                     <select id="retention_mode" name="retention_mode">
@@ -169,7 +183,7 @@
                     <button type="submit" class="btn-settings btn-save">Save settings</button>
                 </div>
             </form>
-            <form method="POST" action="/settings/retention/run" style="margin-top:0.5rem;">
+            <form method="POST" action="/settings/retention/run" class="ajax-form" style="margin-top:0.5rem;">
                 <div class="settings-actions">
                     <button type="submit" class="btn-settings btn-run">Run cleanup now</button>
                 </div>
@@ -191,6 +205,136 @@
             </div>
             <p class="settings-help">Archive mode moves clips older than the selected days to the destination folder. Delete mode permanently removes clips older than the selected days.</p>
             {% if status_message %}<p class="status-msg">{{ status_message }}</p>{% endif %}
+        </div>
+
+        <div class="settings-card">
+            <h2>Nextcloud Sync</h2>
+            <form method="POST" action="/settings/nextcloud" class="ajax-form">
+                <div class="settings-row">
+                    <label for="nextcloud_enabled">
+                        <input type="checkbox" id="nextcloud_enabled" name="nextcloud_enabled"
+                               {% if nextcloud.enabled %}checked{% endif %}>
+                        Enable Nextcloud sync
+                    </label>
+                </div>
+                <div class="settings-row">
+                    <label for="nextcloud_remote">rclone remote:path</label>
+                    <input id="nextcloud_remote" name="nextcloud_remote" type="text"
+                           value="{{ nextcloud.remote }}" placeholder="nextcloud:Watchman">
+                </div>
+                <div class="settings-row">
+                    <label for="nextcloud_rclone_path">rclone binary path</label>
+                    <input id="nextcloud_rclone_path" name="nextcloud_rclone_path" type="text"
+                           value="{{ nextcloud.rclone_path }}" placeholder="rclone">
+                </div>
+                <div class="settings-actions">
+                    <button type="submit" class="btn-settings btn-save">Save settings</button>
+                </div>
+            </form>
+            <p class="settings-help">
+                When enabled and retention mode is "Delete", each date folder is uploaded to
+                Nextcloud via rclone and verified before it's allowed to be deleted. The rclone
+                remote must already be configured on this Pi (<code>rclone config</code>) before
+                enabling this.
+            </p>
+        </div>
+
+        <div class="settings-card">
+            <h2>Notifications (Pushover)</h2>
+            <form method="POST" action="/settings/notifications" class="ajax-form">
+                <div class="settings-row">
+                    <label for="notify_enabled">
+                        <input type="checkbox" id="notify_enabled" name="notify_enabled"
+                               {% if notify.enabled %}checked{% endif %}>
+                        Enable push notifications
+                    </label>
+                </div>
+                <div class="settings-row">
+                    <label for="pushover_token">Pushover app token</label>
+                    <input id="pushover_token" name="pushover_token" type="text"
+                           value="{{ notify.token }}" placeholder="your_app_token_here">
+                </div>
+                <div class="settings-row">
+                    <label for="pushover_user">Pushover user key</label>
+                    <input id="pushover_user" name="pushover_user" type="text"
+                           value="{{ notify.user }}" placeholder="your_user_key_here">
+                </div>
+                <div class="settings-actions">
+                    <button type="submit" class="btn-settings btn-save">Save settings</button>
+                </div>
+            </form>
+            <form method="POST" action="/settings/notifications/test" class="ajax-form" style="margin-top:0.5rem;">
+                <div class="settings-actions">
+                    <button type="submit" class="btn-settings btn-run">Send test notification</button>
+                </div>
+            </form>
+            <p class="settings-help">
+                Notifies you when clips are ingested, when an ingest cycle fails or triggers a
+                USB watchdog reset, when retention cleanup runs, and when a Nextcloud upload or
+                verification fails. Get your token/user key at
+                <a href="https://pushover.net" target="_blank" rel="noopener" style="color:#7aa2e8;">pushover.net</a>.
+            </p>
+        </div>
+
+        <div class="settings-card">
+            <h2>Video Playback</h2>
+            <form method="POST" action="/settings/video" class="ajax-form">
+                <div class="settings-row">
+                    <label for="video_preload">Preload behavior</label>
+                    <select id="video_preload" name="video_preload">
+                        <option value="none" {% if video.preload == 'none' %}selected{% endif %}>None (custom play button + duration badge — safest)</option>
+                        <option value="metadata" {% if video.preload == 'metadata' %}selected{% endif %}>Metadata (reverts to plain native player, fetches metadata for every clip on page load)</option>
+                        <option value="auto" disabled>Auto (disabled — root cause of a separate crash still unconfirmed pending hardware fix)</option>
+                    </select>
+                </div>
+                <div class="settings-actions">
+                    <button type="submit" class="btn-settings btn-save">Save settings</button>
+                </div>
+            </form>
+            <p class="settings-help">
+                Controls how much each clip loads before you press play. <strong>None</strong> is
+                recommended and shows a duration badge (pre-computed at ingest time, no browser
+                request needed) plus a custom play button — the real player only loads once you
+                click it. <strong>Metadata</strong> reverts clips to the plain native video player
+                (no badge, no custom play button) and makes the browser fetch metadata for every
+                visible clip on page load — with many clips on one page this can trigger a burst
+                of simultaneous requests that has caused real crashes on this setup before. The
+                duration badge already shows accurate duration under <strong>None</strong>, so
+                <strong>Metadata</strong> provides no extra information — only the same risk it
+                was built to avoid. <strong>Auto</strong> is disabled for now: a separate,
+                still-unconfirmed crash is under investigation pending a hardware fix, so this
+                option isn't safe to offer until that's resolved.
+            </p>
+        </div>
+
+        <div class="settings-card">
+            <h2>Service Status</h2>
+            <div class="settings-actions" style="margin-bottom:0.6rem;">
+                <button type="button" id="check-status-btn" class="btn-settings btn-run">Check status</button>
+            </div>
+            <div class="status-box" id="status-box">Press "Check status" to load current service status.</div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Restart Services</h2>
+            <div class="settings-actions" style="flex-wrap:wrap;">
+                <form method="POST" action="/services/restart/watchman" class="ajax-form" style="display:inline;">
+                    <button type="submit" class="btn-settings btn-run">Restart Watchman (ingest)</button>
+                </form>
+                <form method="POST" action="/services/restart/watchman-web" class="ajax-form" style="display:inline;">
+                    <button type="submit" class="btn-settings btn-run">Restart Web UI</button>
+                </form>
+                <form method="POST" action="/services/restart/watchman-net" class="ajax-form" style="display:inline;">
+                    <button type="submit" class="btn-settings btn-run">Restart Network Watchdog</button>
+                </form>
+                <form method="POST" action="/services/restart/watchman-startup" class="ajax-form" style="display:inline;">
+                    <button type="submit" class="btn-settings btn-run">Restart Startup Diagnostics</button>
+                </form>
+            </div>
+            <p class="settings-help">
+                Restarting the Web UI will briefly disconnect this page — reload after a few
+                seconds if it doesn't come back on its own.
+            </p>
         </div>
     </main>
 
@@ -258,6 +402,57 @@
                 timer = window.setTimeout(fetchEstimate, 250);
             });
         })();
+
+        (function () {
+            const btn = document.getElementById('check-status-btn');
+            const box = document.getElementById('status-box');
+            if (!btn || !box) return;
+
+            btn.addEventListener('click', function () {
+                btn.disabled = true;
+                btn.textContent = 'Checking…';
+                box.textContent = 'Loading…';
+
+                fetch('/services/status')
+                    .then(function (res) { return res.text(); })
+                    .then(function (text) {
+                        box.textContent = text;
+                    })
+                    .catch(function (err) {
+                        box.textContent = 'Failed to fetch status: ' + err;
+                    })
+                    .finally(function () {
+                        btn.disabled = false;
+                        btn.textContent = 'Check status';
+                    });
+            });
+        })();
+
+        // Submit every settings/action form via fetch with a custom header
+        // instead of a plain HTML POST. Plain forms can't set custom
+        // headers at all, so requiring one here means a forged form on some
+        // other page — the classic CSRF pattern — is structurally unable to
+        // trigger these actions, on top of the server-side Origin check.
+        document.querySelectorAll('form.ajax-form').forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn) submitBtn.disabled = true;
+
+                fetch(form.getAttribute('action'), {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: new FormData(form),
+                })
+                    .then(function (res) {
+                        window.location = res.url || window.location.href;
+                    })
+                    .catch(function () {
+                        if (submitBtn) submitBtn.disabled = false;
+                        alert('Request failed — check your connection and try again.');
+                    });
+            });
+        });
     </script>
 </body>
 </html>

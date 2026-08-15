@@ -29,6 +29,13 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# The user who ran `sudo` — used for ARCHIVE_DIR, file ownership, and the
+# web service's User= directive, so this works out of the box no matter
+# what your actual login is (not just a user literally named "watchman").
+# Falls back to "watchman" only if run as a true root login with no
+# SUDO_USER set (e.g. logged in directly as root).
+SERVICE_USER="${SUDO_USER:-watchman}"
+
 # Detect boot directory (Bookworm = /boot/firmware, Bullseye = /boot)
 if [ -f /boot/firmware/config.txt ]; then
     BOOT_DIR="/boot/firmware"
@@ -43,13 +50,14 @@ echo "=== Watchman Setup ==="
 echo "Boot dir:    $BOOT_DIR"
 echo "Install dir: $INSTALL_DIR"
 echo "Config:      $CONFIG_FILE"
+echo "Service user: $SERVICE_USER"
 echo ""
 
 # ── Step 1: Install dependencies ────────────────────────────────────────────
 
 echo "[1/9] Installing dependencies..."
 apt-get update -qq
-apt-get install -y -qq python3 python3-flask exfatprogs fdisk util-linux watchdog
+apt-get install -y -qq python3 python3-flask exfatprogs fdisk util-linux watchdog ffmpeg parted
 # Enable persistent journal so logs survive reboots
 mkdir -p /var/log/journal
 chown root:systemd-journal /var/log/journal
@@ -119,7 +127,9 @@ cp "$SCRIPT_DIR/scripts/watchman-startup.sh" "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/watchman.py" "$INSTALL_DIR/web.py" "$INSTALL_DIR/net-watchdog.sh" "$INSTALL_DIR/watchman-startup.sh"
 
 # Only install config if it doesn't already exist (don't overwrite user edits)
+FRESH_CONFIG_INSTALL=0
 if [ ! -f "$CONFIG_FILE" ]; then
+    FRESH_CONFIG_INSTALL=1
     if [ -f "$SCRIPT_DIR/watchman.conf" ]; then
         cp "$SCRIPT_DIR/watchman.conf" "$CONFIG_FILE"
     elif [ -f "$SCRIPT_DIR/watchman.conf.example" ]; then
@@ -136,6 +146,37 @@ else
 fi
 
 echo "[OK] Files installed"
+echo ""
+
+# On a fresh install only, point ARCHIVE_DIR at the detected user's actual
+# home directory instead of the template's literal /home/watchman/archive.
+# Only rewrites it if it's still the untouched template default — never
+# touches a value you've already customized on a re-run.
+if [ "$FRESH_CONFIG_INSTALL" -eq 1 ] && [ "$SERVICE_USER" != "watchman" ] \
+   && grep -q "^ARCHIVE_DIR=/home/watchman/archive$" "$CONFIG_FILE"; then
+    sed -i "s|^ARCHIVE_DIR=/home/watchman/archive$|ARCHIVE_DIR=/home/$SERVICE_USER/archive|" "$CONFIG_FILE"
+    echo "  Set ARCHIVE_DIR=/home/$SERVICE_USER/archive in config"
+fi
+
+# Same deal for SERVICE_USER itself — the template ships with the key
+# already present (SERVICE_USER=watchman), so the "add if missing" check
+# below would never fire on a fresh install. Rewrite it directly instead.
+if [ "$FRESH_CONFIG_INSTALL" -eq 1 ] && [ "$SERVICE_USER" != "watchman" ] \
+   && grep -q "^SERVICE_USER=watchman$" "$CONFIG_FILE"; then
+    sed -i "s|^SERVICE_USER=watchman$|SERVICE_USER=$SERVICE_USER|" "$CONFIG_FILE"
+    echo "  Set SERVICE_USER=$SERVICE_USER in config"
+fi
+
+# Fallback for hand-made/older configs that don't have the key at all
+if [ -f "$CONFIG_FILE" ] && ! grep -q "^SERVICE_USER=" "$CONFIG_FILE"; then
+    {
+        echo ""
+        echo "# System user the web service runs as and archived files are"
+        echo "# chowned to. Auto-detected from whoever ran setup.sh via sudo."
+        echo "SERVICE_USER=$SERVICE_USER"
+    } >> "$CONFIG_FILE"
+    echo "  Added SERVICE_USER=$SERVICE_USER to config"
+fi
 echo ""
 
 # ── Step 5: Create virtual disk ─────────────────────────────────────────────
@@ -169,7 +210,7 @@ echo ""
 
 echo "[6/9] Creating directories..."
 
-ARCHIVE_DIR="/home/watchman/archive"
+ARCHIVE_DIR="/home/$SERVICE_USER/archive"
 MOUNT_POINT="/mnt/ghostdrive"
 if [ -f "$CONFIG_FILE" ]; then
     while IFS='=' read -r key value; do
@@ -182,13 +223,56 @@ if [ -f "$CONFIG_FILE" ]; then
     done < <(tr -d '\r' < "$CONFIG_FILE" | grep -v '^\s*#' | grep '=')
 fi
 
-mkdir -p "$ARCHIVE_DIR" "$MOUNT_POINT"
+mkdir -p "$ARCHIVE_DIR" "$MOUNT_POINT" /var/log/watchman "$ARCHIVE_DIR/.thumbnails"
 
-if id -u watchman >/dev/null 2>&1; then
-    chown watchman:watchman "$ARCHIVE_DIR"
+if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$ARCHIVE_DIR"
+else
+    echo "  WARNING: user '$SERVICE_USER' not found — leaving $ARCHIVE_DIR ownership as-is"
 fi
 
 echo "[OK] Directories created"
+echo ""
+
+# Backfill thumbnails and duration metadata for any clips already in the
+# archive (e.g. upgrading an existing install to a version with this
+# support). New clips get both automatically going forward via
+# archive_video() in watchman.py.
+echo "Checking for archived clips missing thumbnails/duration..."
+BACKFILL_COUNT=0
+while IFS= read -r -d '' video; do
+    date_dir="$(basename "$(dirname "$video")")"
+    stem="$(basename "${video%.mp4}")"
+    thumb="$ARCHIVE_DIR/.thumbnails/$date_dir/$stem.jpg"
+    meta="$ARCHIVE_DIR/.thumbnails/$date_dir/$stem.json"
+    changed=0
+    if [ ! -f "$thumb" ]; then
+        mkdir -p "$(dirname "$thumb")"
+        if ffmpeg -y -ss 1 -i "$video" -frames:v 1 -update 1 -vf scale=320:-1 "$thumb" \
+            > /dev/null 2>&1; then
+            changed=1
+        fi
+    fi
+    if [ ! -f "$meta" ]; then
+        mkdir -p "$(dirname "$meta")"
+        duration=$(ffprobe -v error -show_entries format=duration -of \
+            default=noprint_wrappers=1:nokey=1 "$video" 2>/dev/null)
+        if [ -n "$duration" ]; then
+            printf '{"duration": %s}' "$duration" > "$meta"
+            changed=1
+        fi
+    fi
+    [ "$changed" -eq 1 ] && BACKFILL_COUNT=$((BACKFILL_COUNT + 1))
+done < <(find "$ARCHIVE_DIR" -mindepth 2 -maxdepth 2 -name "*.mp4" -not -path "*/.thumbnails/*" -print0 2>/dev/null)
+
+if [ "$BACKFILL_COUNT" -gt 0 ]; then
+    if id -u "$SERVICE_USER" >/dev/null 2>&1; then
+        chown -R "$SERVICE_USER:$SERVICE_USER" "$ARCHIVE_DIR/.thumbnails"
+    fi
+    echo "  Updated $BACKFILL_COUNT existing clip(s) with thumbnail/duration data"
+else
+    echo "  No backfill needed"
+fi
 echo ""
 
 # ── Step 7: Install systemd services ────────────────────────────────────────
@@ -196,11 +280,32 @@ echo ""
 echo "[7/9] Installing systemd services..."
 
 cp "$SCRIPT_DIR/services/watchman.service" /etc/systemd/system/
-cp "$SCRIPT_DIR/services/watchman-web.service" /etc/systemd/system/
+# watchman-web.service runs as a non-root user for least-privilege — swap
+# in whoever setup.sh detected instead of the repo's placeholder "watchman"
+# user, which won't exist on most systems and would fail to start.
+sed "s/^User=.*/User=$SERVICE_USER/" "$SCRIPT_DIR/services/watchman-web.service" \
+    > /etc/systemd/system/watchman-web.service
 cp "$SCRIPT_DIR/services/watchman-startup.service" /etc/systemd/system/
 
 systemctl daemon-reload
 systemctl enable watchman.service watchman-web.service watchman-startup.service
+
+# Let SERVICE_USER restart (only) Watchman's own services without a
+# password — this is what powers the "Restart" buttons on the web UI's
+# Settings page. Scoped to exact commands only, nothing broader.
+SUDOERS_FILE="/etc/sudoers.d/watchman-restart"
+cat > "$SUDOERS_FILE" <<EOF
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart watchman.service
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart watchman-web.service
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart watchman-net.service
+$SERVICE_USER ALL=(root) NOPASSWD: /usr/bin/systemctl restart watchman-startup.service
+EOF
+chmod 440 "$SUDOERS_FILE"
+if ! visudo -c -f "$SUDOERS_FILE" > /dev/null 2>&1; then
+    echo "  WARNING: generated sudoers file failed validation — removing it."
+    echo "  Web UI restart buttons will not work until this is fixed manually."
+    rm -f "$SUDOERS_FILE"
+fi
 
 echo "[OK] Services installed and enabled"
 echo ""

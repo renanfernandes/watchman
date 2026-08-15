@@ -129,6 +129,42 @@
             display: block;
             background: #000;
         }
+        .video-wrap {
+            position: relative;
+        }
+        .duration-badge {
+            position: absolute;
+            right: 6px;
+            bottom: 6px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            font-size: 0.72rem;
+            padding: 1px 5px;
+            border-radius: 3px;
+            pointer-events: none;
+            z-index: 2;
+        }
+        .play-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            font-size: 1.1rem;
+            line-height: 46px;
+            text-align: center;
+            padding: 0 0 0 3px;
+            cursor: pointer;
+            z-index: 3;
+        }
+        .play-overlay:hover {
+            background: rgba(233, 69, 96, 0.85);
+        }
         .video-info {
             padding: 0.75rem;
             display: flex;
@@ -630,9 +666,19 @@
                         <div class="video-check">
                             <input type="checkbox" name="selected" value="{{ video.name }}" class="video-cb">
                         </div>
-                        <video controls preload="metadata">
+                        {% if video_preload == 'none' %}
+                        <div class="video-wrap">
+                            <video preload="none" poster="/thumbnail/{{ current_date }}/{{ video.name }}">
+                                <source src="/video/{{ current_date }}/{{ video.name }}" type="video/mp4">
+                            </video>
+                            <button type="button" class="play-overlay" aria-label="Play video">&#9658;</button>
+                            {% if video.duration %}<span class="duration-badge">{{ video.duration }}</span>{% endif %}
+                        </div>
+                        {% else %}
+                        <video controls preload="{{ video_preload }}" poster="/thumbnail/{{ current_date }}/{{ video.name }}">
                             <source src="/video/{{ current_date }}/{{ video.name }}" type="video/mp4">
                         </video>
+                        {% endif %}
                         <div class="video-info">
                             <span>
                                 {% if video.time %}<strong style="color:#e0e0e0">{{ video.time }}</strong>{% endif %}
@@ -680,6 +726,34 @@
     </div>
 
     <script>
+        // Videos start with no native controls at all, showing only the
+        // poster, our custom play button, and the duration badge — this
+        // avoids the browser's own "0:00 / 0:00" control bar competing with
+        // our badge before playback has actually started. Clicking the
+        // custom play button switches on native controls and starts
+        // playback; from that point on, the real player takes over
+        // completely, matching normal video-site behavior.
+        document.querySelectorAll('.video-wrap').forEach(function (wrap) {
+            const video = wrap.querySelector('video');
+            const playBtn = wrap.querySelector('.play-overlay');
+            const badge = wrap.querySelector('.duration-badge');
+            if (!video || !playBtn) return;
+
+            playBtn.addEventListener('click', function () {
+                video.setAttribute('controls', '');
+                playBtn.style.display = 'none';
+                if (badge) badge.style.display = 'none';
+                video.play();
+            });
+
+            // Safety net: if playback starts any other way (keyboard,
+            // browser extension, etc.), still clean up the overlay/badge.
+            video.addEventListener('play', function () {
+                playBtn.style.display = 'none';
+                if (badge) badge.style.display = 'none';
+            });
+        });
+
         function toggleSection(header, bodyId) {
             const body = document.getElementById(bodyId);
             const collapsed = body.classList.toggle('collapsed');
@@ -704,12 +778,56 @@
         }
         function deleteSingle(date, filename) {
             if (!confirm('Delete ' + filename + '?')) return;
-            const f = document.createElement('form');
-            f.method = 'POST';
-            f.action = '/delete/' + date + '/' + filename;
-            document.body.appendChild(f);
-            f.submit();
+            fetch('/delete/' + encodeURIComponent(date) + '/' + encodeURIComponent(filename), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+                .then(function (res) { window.location = res.url || window.location.href; })
+                .catch(function () { alert('Delete failed — check your connection and try again.'); });
         }
+
+        // Submit the bulk download/delete form via fetch with a custom
+        // header instead of a plain HTML POST — required so a forged form
+        // on some other page can't trigger either action (plain forms
+        // can't set custom headers at all), on top of the server-side
+        // Origin check. "download" returns a zip file directly rather than
+        // redirecting, so it's handled differently from "delete".
+        (function () {
+            const bulkForm = document.getElementById('bulk-form');
+            if (!bulkForm) return;
+
+            bulkForm.addEventListener('submit', function (e) {
+                e.preventDefault();
+                const submitter = e.submitter;
+                const action = submitter ? submitter.value : '';
+                const fd = new FormData(bulkForm);
+                if (submitter && submitter.name) fd.append(submitter.name, submitter.value);
+
+                fetch(bulkForm.getAttribute('action'), {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: fd,
+                })
+                    .then(function (res) {
+                        if (action === 'download') {
+                            return res.blob().then(function (blob) {
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'watchman_{{ current_date }}.zip';
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                                URL.revokeObjectURL(url);
+                            });
+                        }
+                        window.location = res.url || window.location.href;
+                    })
+                    .catch(function () {
+                        alert('Request failed — check your connection and try again.');
+                    });
+            });
+        })();
 
         // Desktop sidebar calendar
         (function () {

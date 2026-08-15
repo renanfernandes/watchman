@@ -20,6 +20,9 @@ import signal
 import subprocess
 import sys
 import time
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
+from urllib.error import URLError
 from datetime import datetime
 from pathlib import Path
 
@@ -37,7 +40,11 @@ DEFAULTS = {
     "MIN_INTERVAL": "300",
     "RECONNECT_COOLDOWN": "60",
     "WATCHDOG_THRESHOLD": "3",
-    "CONNECTIVITY_LOG": "/home/watchman/logs/connectivity.jsonl",
+    "CONNECTIVITY_LOG": "/var/log/watchman/connectivity.jsonl",
+    "SERVICE_USER": "watchman",
+    "NOTIFY_ENABLED": "no",
+    "PUSHOVER_TOKEN": "",
+    "PUSHOVER_USER": "",
 }
 
 
@@ -54,6 +61,30 @@ def load_config(path: str) -> dict:
             key, value = line.split("=", 1)
             config[key.strip()] = value.strip()
     return config
+
+
+def pushover_notify(cfg: dict, title: str, message: str, priority: int = 0) -> None:
+    """Send a push notification via Pushover, if enabled and configured."""
+    if cfg.get("NOTIFY_ENABLED", "no").strip().lower() not in {"yes", "true", "1"}:
+        return
+    token = cfg.get("PUSHOVER_TOKEN", "").strip()
+    user = cfg.get("PUSHOVER_USER", "").strip()
+    if not token or not user:
+        return
+    try:
+        data = urlencode({
+            "token": token,
+            "user": user,
+            "title": title,
+            "message": message,
+            "priority": priority,
+        }).encode()
+        req = Request("https://api.pushover.net/1/messages.json", data=data)
+        urlopen(req, timeout=10)
+    except URLError as e:
+        log.warning("Pushover notification failed: %s", e)
+    except Exception as e:
+        log.warning("Pushover notification error: %s", e)
 
 
 # ── Connectivity logging ────────────────────────────────────────────────────
@@ -191,9 +222,14 @@ def mount_container(container: str, mount_point: str) -> bool:
         partition = f"{_loop_dev}p1"
 
         # Give the kernel a moment to create the partition device node.
-        for _ in range(10):
+        for attempt in range(10):
             if Path(partition).exists():
                 break
+            # losetup -P asks the kernel to scan for partitions, but under
+            # load (e.g. right after a USB gadget reload) the device node
+            # can lag. Nudge it directly rather than just polling blind.
+            run(["partprobe", _loop_dev], check=False, timeout=5)
+            run(["udevadm", "settle", "--timeout=2"], check=False, timeout=5)
             time.sleep(1)
 
         if not Path(partition).exists():
@@ -240,7 +276,62 @@ def find_videos(mount_point: str) -> list[Path]:
     return list(root.rglob("*.mp4"))
 
 
-def archive_video(src: Path, archive_dir: Path) -> bool:
+def generate_thumbnail(video_path: Path, thumb_path: Path) -> bool:
+    """Generate a JPEG thumbnail from the first second of a clip using ffmpeg."""
+    try:
+        thumb_path.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-ss", "1", "-i", str(video_path),
+             "-frames:v", "1", "-update", "1", "-vf", "scale=320:-1", str(thumb_path)],
+            capture_output=True, timeout=30
+        )
+        if result.returncode != 0 or not thumb_path.exists():
+            log.warning("Thumbnail generation failed for %s: %s", video_path.name, result.stderr.decode(errors="ignore")[:200])
+            return False
+        return True
+    except Exception as e:
+        log.warning("Thumbnail generation error for %s: %s", video_path.name, e)
+        return False
+
+
+def probe_video_meta(video_path: Path, meta_path: Path) -> bool:
+    """Extract duration/dimensions via ffprobe and cache as a small JSON sidecar.
+
+    This gives the web UI the same "know before you press play" benefit as
+    preload="metadata", but without ever making the browser touch the video
+    file itself — avoiding the concurrent-request burst that can overload an
+    underpowered setup when many clips are on one page.
+    """
+    try:
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries",
+             "format=duration:stream=width,height",
+             "-of", "json", str(video_path)],
+            capture_output=True, text=True, timeout=15,
+        )
+        if result.returncode != 0:
+            log.warning("ffprobe failed for %s: %s", video_path.name, result.stderr[:200])
+            return False
+        data = json.loads(result.stdout)
+        duration = float(data.get("format", {}).get("duration", 0) or 0)
+        width = height = None
+        for stream in data.get("streams", []):
+            if "width" in stream and "height" in stream:
+                width, height = stream["width"], stream["height"]
+                break
+        meta_path.write_text(json.dumps({
+            "duration": round(duration, 1),
+            "width": width,
+            "height": height,
+        }))
+        return True
+    except Exception as e:
+        log.warning("ffprobe error for %s: %s", video_path.name, e)
+        return False
+
+
+def archive_video(src: Path, archive_dir: Path, service_user: str = "watchman") -> bool:
     """Move a video file into the date-organized archive."""
     try:
         date_folder = archive_dir / datetime.now().strftime("%Y-%m-%d")
@@ -254,14 +345,25 @@ def archive_video(src: Path, archive_dir: Path) -> bool:
 
         shutil.move(str(src), str(dest))
 
-        # Ensure the web app (non-root) can delete files
+        thumb_path = archive_dir / ".thumbnails" / date_folder.name / f"{dest.stem}.jpg"
+        generate_thumbnail(dest, thumb_path)
+
+        meta_path = archive_dir / ".thumbnails" / date_folder.name / f"{dest.stem}.json"
+        probe_video_meta(dest, meta_path)
+
+        # Ensure the web app (non-root, runs as SERVICE_USER) can delete files
         try:
             import pwd
-            pw = pwd.getpwnam("watchman")
+            pw = pwd.getpwnam(service_user)
             os.chown(dest, pw.pw_uid, pw.pw_gid)
             os.chown(date_folder, pw.pw_uid, pw.pw_gid)
+            if thumb_path.exists():
+                os.chown(thumb_path, pw.pw_uid, pw.pw_gid)
+                os.chown(thumb_path.parent, pw.pw_uid, pw.pw_gid)
+            if meta_path.exists():
+                os.chown(meta_path, pw.pw_uid, pw.pw_gid)
         except Exception as e:
-            log.warning("Could not chown archived file: %s", e)
+            log.warning("Could not chown archived file to '%s': %s", service_user, e)
 
         log.info("Archived: %s -> %s", src.name, dest)
         return True
@@ -274,7 +376,7 @@ def archive_video(src: Path, archive_dir: Path) -> bool:
 
 
 def ingest(container: str, mount_point: str, archive_dir: str,
-           module: str, no_gadget: bool) -> int:
+           module: str, no_gadget: bool, service_user: str = "watchman") -> int:
     """
     Run one full ingest cycle:
       1. Unload gadget  (disconnect Blink's view of the drive)
@@ -298,7 +400,7 @@ def ingest(container: str, mount_point: str, archive_dir: str,
 
         archived = 0
         for video in videos:
-            if archive_video(video, Path(archive_dir)):
+            if archive_video(video, Path(archive_dir), service_user):
                 archived += 1
         return archived
 
@@ -340,6 +442,7 @@ def main() -> int:
     reconnect_cooldown = int(cfg["RECONNECT_COOLDOWN"])
     watchdog_threshold = int(cfg["WATCHDOG_THRESHOLD"])
     connectivity_log = cfg["CONNECTIVITY_LOG"]
+    service_user = cfg["SERVICE_USER"]
 
     # Must run as root for modprobe and mount.
     if hasattr(os, "geteuid") and os.geteuid() != 0:
@@ -376,7 +479,7 @@ def main() -> int:
 
     # ── One-shot mode ───────────────────────────────────────────────────
     if args.once:
-        result = ingest(container, mount_point, archive_dir, module, args.no_gadget)
+        result = ingest(container, mount_point, archive_dir, module, args.no_gadget, service_user)
         log.info("Done. Archived %d file(s)", max(0, result))
         return 0
 
@@ -412,7 +515,7 @@ def main() -> int:
                     continue
 
                 result = ingest(container, mount_point, archive_dir,
-                                module, args.no_gadget)
+                                module, args.no_gadget, service_user)
                 last_cycle = time.time()
                 cycle_pending = False
 
@@ -422,6 +525,8 @@ def main() -> int:
                                      {"files_archived": result})
                     if result > 0:
                         log.info("Cycle done: %d file(s) archived", result)
+                        pushover_notify(cfg, "Watchman — Clips Ingested",
+                                        f"Archived {result} clip(s).")
                     else:
                         log.info("Cycle done: no new files")
                 else:
@@ -430,9 +535,20 @@ def main() -> int:
                                      {"consecutive_failures": consecutive_failures})
                     log.warning("Cycle failed (%d/%d before watchdog reset)",
                                 consecutive_failures, watchdog_threshold)
+                    pushover_notify(
+                        cfg, "Watchman — Ingest Failed",
+                        f"Ingest cycle failed ({consecutive_failures}/{watchdog_threshold} "
+                        f"before watchdog reset).",
+                        priority=1,
+                    )
 
                     if consecutive_failures >= watchdog_threshold:
                         usb_reset(module, container)
+                        pushover_notify(
+                            cfg, "Watchman — USB Reset",
+                            "Watchdog threshold reached — performed full USB gadget reset.",
+                            priority=1,
+                        )
                         consecutive_failures = 0
 
                 # Refresh mtime baseline and start cooldown so Blink's

@@ -5,7 +5,8 @@
 # At minimum, check the following before starting the service:
 #
 #   1. ARCHIVE_DIR  — must point to a directory owned by the user running Watchman.
-#                     Default assumes a "watchman" user. Change if your user is different.
+#                     setup.sh auto-fills this and SERVICE_USER based on whoever
+#                     ran it via sudo, so this is usually already correct.
 #
 #   2. PUSHOVER_TOKEN / PUSHOVER_USER  — required if NOTIFY_ENABLED=yes.
 #                     Get your credentials at https://pushover.net
@@ -26,13 +27,25 @@ MOUNT_POINT=/mnt/ghostdrive
 # ── Archive ─────────────────────────────────────────────────
 
 # Where videos are permanently stored.
-# !! Change this if your user is not "watchman" (e.g. /home/pi/archive)
+# Auto-filled by setup.sh based on whoever ran it via sudo — you normally
+# don't need to change this by hand (see SERVICE_USER below).
 ARCHIVE_DIR=/home/watchman/archive
+
+# System user the web service runs as, and that archived files get
+# chowned to (so the non-root web UI can delete/manage them).
+# setup.sh auto-detects and fills this in based on whoever ran it via
+# sudo — you normally don't need to touch this by hand.
+SERVICE_USER=watchman
 
 # ── USB Gadget ──────────────────────────────────────────────
 
 # Kernel module for USB mass storage
 GADGET_MODULE=g_mass_storage
+
+# Where WiFi/connectivity snapshots get logged (JSON lines) around each
+# write-detected/ingest event. watchman.service runs as root, so this
+# lives under /var/log rather than any particular user's home directory.
+CONNECTIVITY_LOG=/var/log/watchman/connectivity.jsonl
 
 # ── Timing ──────────────────────────────────────────────────
 
@@ -73,6 +86,23 @@ RETENTION_ARCHIVE_DIR=
 # Minimum seconds between automatic retention runs in web.py
 RETENTION_RUN_INTERVAL=3600
 
+# ── Nextcloud Sync ──────────────────────────────────────────────────────────
+
+# When "yes" and RETENTION_MODE=delete, each date folder is uploaded to
+# Nextcloud (via rclone) and verified before it's allowed to be deleted.
+# Uses the same year/month/day folder naming the archive already uses;
+# rclone creates matching folders on Nextcloud automatically if missing.
+# If a folder can't be verified as uploaded, it's skipped and retried on
+# the next retention run — nothing is deleted until it's confirmed offsite.
+NEXTCLOUD_ENABLED=no
+
+# rclone remote:path — must already be configured via `rclone config`
+# e.g. nextcloud:Watchman  (see README for setup)
+NEXTCLOUD_REMOTE=
+
+# Path to the rclone binary (just "rclone" if it's already on PATH)
+NEXTCLOUD_RCLONE_PATH=rclone
+
 # ── Network Watchdog ─────────────────────────────────────────────────────────
 
 # Set to "no" to disable without removing the service
@@ -88,6 +118,12 @@ NET_WATCHDOG_TIMEOUT=600
 NET_WATCHDOG_INTERVAL=300
 
 # ── Notifications (Pushover) ─────────────────────────────────────────────────
+#
+# When enabled, notifications are sent for:
+#   - Clips successfully ingested from Blink
+#   - Ingest cycle failures, and USB gadget watchdog resets
+#   - Retention cleanup runs (files deleted/archived, or errors)
+#   - Nextcloud upload/verification failures
 
 # Set to "no" to disable notifications
 NOTIFY_ENABLED=yes
@@ -97,3 +133,16 @@ PUSHOVER_TOKEN=your_app_token_here
 
 # Pushover user key (from https://pushover.net)
 PUSHOVER_USER=your_user_key_here
+
+# ── Video Playback ────────────────────────────────────────────────────────────
+#
+# Controls how much of each clip the browser loads before you press play.
+#   none     = load nothing until play is pressed (default, safest)
+#   metadata = browser fetches duration/dimensions for every visible clip
+#   auto     = browser may preload the full video for every visible clip
+# With many clips on one page, "metadata" or "auto" can trigger a burst of
+# simultaneous requests — this has caused real crashes on underpowered
+# setups (e.g. a UPS HAT running below its rated cell count). Only change
+# this if you understand that tradeoff. Also editable from the web UI's
+# Settings page.
+VIDEO_PRELOAD=none
