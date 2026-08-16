@@ -34,17 +34,19 @@ notify() {
     local title="$1"
     local message="$2"
     local priority="${3:-0}"
+    local formatted_message
 
     if [ "$NOTIFY_ENABLED" != "yes" ] || [ -z "$PUSHOVER_TOKEN" ] || [ -z "$PUSHOVER_USER" ]; then
         echo "[notify] Skipped (disabled or keys missing)"
         return 0
     fi
 
+    printf -v formatted_message 'Host: %s\n\n%s' "$HOSTNAME" "$message"
     curl -s \
         --form-string "token=${PUSHOVER_TOKEN}" \
         --form-string "user=${PUSHOVER_USER}" \
-        --form-string "title=${title}" \
-        --form-string "message=${message}" \
+        --form-string "title=Watchman | ${title}" \
+        --form-string "message=${formatted_message}" \
         --form-string "priority=${priority}" \
         https://api.pushover.net/1/messages.json > /dev/null 2>&1 || true
 }
@@ -109,7 +111,8 @@ fi
 BOOT_TIME=$(uptime -s 2>/dev/null || date)
 IP=$(hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
 
-MESSAGE="Boot: ${BOOT_TIME}
+MESSAGE="Status: Online
+Boot: ${BOOT_TIME}
 IP: ${IP}
 
 WiFi power save: ${WIFI_STATUS}
@@ -119,6 +122,6 @@ $(echo -e "$SERVICES_STATUS")
 Prev boot log:
 $(echo -e "$PREV_BOOT_SUMMARY" | head -20)"
 
-notify "Watchman Online — ${HOSTNAME}" "$MESSAGE" 0
+notify "Startup" "$MESSAGE" 0
 
 echo "[startup] Done. Notification sent."

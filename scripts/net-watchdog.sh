@@ -47,16 +47,18 @@ notify() {
     local title="$1"
     local message="$2"
     local priority="${3:-0}"   # -1 quiet, 0 normal, 1 high
+    local formatted_message
 
     if [ "$NOTIFY_ENABLED" != "yes" ] || [ -z "$PUSHOVER_TOKEN" ] || [ -z "$PUSHOVER_USER" ]; then
         return 0
     fi
 
+    printf -v formatted_message 'Host: %s\n\n%s' "$(hostname)" "$message"
     curl -s \
         --form-string "token=${PUSHOVER_TOKEN}" \
         --form-string "user=${PUSHOVER_USER}" \
-        --form-string "title=${title}" \
-        --form-string "message=${message}" \
+        --form-string "title=Watchman | ${title}" \
+        --form-string "message=${formatted_message}" \
         --form-string "priority=${priority}" \
         https://api.pushover.net/1/messages.json > /dev/null 2>&1 || true
 }
@@ -69,8 +71,8 @@ echo "  Notify:    $NOTIFY_ENABLED"
 
 # ── Startup notification ──────────────────────────────────────────────────────
 
-HOSTNAME=$(hostname)
-notify "Watchman Online" "${HOSTNAME} is online and monitoring connectivity." -1
+notify "Network Watchdog" "Status: Online
+Monitoring connectivity" -1
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
@@ -88,7 +90,8 @@ while true; do
 
         if [ "$offline_seconds" -ge "$NET_WATCHDOG_TIMEOUT" ]; then
             echo "Connectivity lost for ${offline_seconds}s — rebooting now."
-            notify "Watchman Rebooting" "${HOSTNAME} lost connectivity for ${offline_seconds}s. Rebooting now." 1
+            notify "Network Watchdog" "Status: Rebooting
+Offline duration: ${offline_seconds}s" 1
             sleep 3   # give Pushover a moment to send before reboot
             /sbin/reboot
         fi

@@ -94,7 +94,11 @@
         .status-msg {
             font-size: 0.8rem;
             color: #89d185;
-            margin-top: 0.5rem;
+            background: #102a25;
+            border: 1px solid #2f6f58;
+            border-radius: 6px;
+            padding: 0.7rem 0.8rem;
+            margin-bottom: 1rem;
         }
         .settings-help {
             font-size: 0.75rem;
@@ -162,6 +166,10 @@
     </header>
 
     <main>
+        {% if status_message %}
+            <p class="status-msg" role="status" aria-live="polite">{{ status_message }}</p>
+        {% endif %}
+
         <div class="settings-card">
             <h2>Retention Settings</h2>
             <form method="POST" action="/settings/retention" class="ajax-form">
@@ -204,7 +212,6 @@
                 <span class="cal-legend-item"><span class="cal-legend-dot historical"></span>Clips archived/deleted</span>
             </div>
             <p class="settings-help">Archive mode moves clips older than the selected days to the destination folder. Delete mode permanently removes clips older than the selected days.</p>
-            {% if status_message %}<p class="status-msg">{{ status_message }}</p>{% endif %}
         </div>
 
         <div class="settings-card">

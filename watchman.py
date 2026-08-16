@@ -75,8 +75,8 @@ def pushover_notify(cfg: dict, title: str, message: str, priority: int = 0) -> N
         data = urlencode({
             "token": token,
             "user": user,
-            "title": title,
-            "message": message,
+            "title": f"Watchman | {title}",
+            "message": f"Host: {os.uname().nodename}\n\n{message}",
             "priority": priority,
         }).encode()
         req = Request("https://api.pushover.net/1/messages.json", data=data)
@@ -525,8 +525,8 @@ def main() -> int:
                                      {"files_archived": result})
                     if result > 0:
                         log.info("Cycle done: %d file(s) archived", result)
-                        pushover_notify(cfg, "Watchman — Clips Ingested",
-                                        f"Archived {result} clip(s).")
+                        pushover_notify(cfg, "Clips Ingested",
+                                        f"Status: Complete\nClips archived: {result}")
                     else:
                         log.info("Cycle done: no new files")
                 else:
@@ -536,17 +536,17 @@ def main() -> int:
                     log.warning("Cycle failed (%d/%d before watchdog reset)",
                                 consecutive_failures, watchdog_threshold)
                     pushover_notify(
-                        cfg, "Watchman — Ingest Failed",
-                        f"Ingest cycle failed ({consecutive_failures}/{watchdog_threshold} "
-                        f"before watchdog reset).",
+                        cfg, "Ingest Failed",
+                        f"Status: Failed\nAttempt: {consecutive_failures}/{watchdog_threshold} "
+                        "before watchdog reset",
                         priority=1,
                     )
 
                     if consecutive_failures >= watchdog_threshold:
                         usb_reset(module, container)
                         pushover_notify(
-                            cfg, "Watchman — USB Reset",
-                            "Watchdog threshold reached — performed full USB gadget reset.",
+                            cfg, "USB Reset",
+                            "Status: Complete\nReason: Watchdog threshold reached",
                             priority=1,
                         )
                         consecutive_failures = 0

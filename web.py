@@ -10,6 +10,7 @@ Usage:
 import argparse
 import json
 import logging
+import socket
 import subprocess
 import threading
 import time
@@ -242,8 +243,8 @@ def pushover_notify(title: str, message: str, priority: int = 0) -> None:
         data = urlencode({
             "token": settings["token"],
             "user": settings["user"],
-            "title": title,
-            "message": message,
+            "title": f"Watchman | {title}",
+            "message": f"Host: {socket.gethostname()}\n\n{message}",
             "priority": priority,
         }).encode()
         req = Request("https://api.pushover.net/1/messages.json", data=data)
@@ -270,8 +271,8 @@ def nextcloud_upload_and_verify(folder: Path, year: str, month: str) -> bool:
 
     if not settings["remote"]:
         log.error("NEXTCLOUD_ENABLED=yes but NEXTCLOUD_REMOTE is not set — skipping upload for %s", folder.name)
-        pushover_notify("Watchman — Nextcloud Config Error",
-                         "NEXTCLOUD_ENABLED=yes but NEXTCLOUD_REMOTE is not set.", priority=1)
+        pushover_notify("Nextcloud Config Error",
+                 "Status: Failed\nNEXTCLOUD_REMOTE is not set", priority=1)
         return False
 
     rclone = settings["rclone_path"]
@@ -284,18 +285,18 @@ def nextcloud_upload_and_verify(folder: Path, year: str, month: str) -> bool:
         )
     except FileNotFoundError:
         log.error("rclone binary not found (%s) — cannot ship %s to Nextcloud", rclone, folder.name)
-        pushover_notify("Watchman — Nextcloud Upload Failed",
-                         f"rclone binary not found — cannot ship {folder.name}.", priority=1)
+        pushover_notify("Nextcloud Upload Failed",
+                 f"Status: Failed\nFolder: {folder.name}\nReason: rclone binary not found", priority=1)
         return False
     except subprocess.TimeoutExpired:
         log.error("rclone copy timed out for %s", folder.name)
-        pushover_notify("Watchman — Nextcloud Upload Failed",
-                         f"rclone copy timed out for {folder.name}.", priority=1)
+        pushover_notify("Nextcloud Upload Failed",
+                 f"Status: Failed\nFolder: {folder.name}\nReason: rclone copy timed out", priority=1)
         return False
     except subprocess.CalledProcessError as e:
         log.error("rclone copy failed for %s: %s", folder.name, e.stderr.strip() if e.stderr else e)
-        pushover_notify("Watchman — Nextcloud Upload Failed",
-                         f"rclone copy failed for {folder.name}.", priority=1)
+        pushover_notify("Nextcloud Upload Failed",
+                 f"Status: Failed\nFolder: {folder.name}\nReason: rclone copy failed", priority=1)
         return False
 
     # Double-check: compare local files against what actually landed on
@@ -307,8 +308,8 @@ def nextcloud_upload_and_verify(folder: Path, year: str, month: str) -> bool:
         )
     except (FileNotFoundError, subprocess.TimeoutExpired) as e:
         log.error("rclone check failed for %s: %s", folder.name, e)
-        pushover_notify("Watchman — Nextcloud Verify Failed",
-                         f"rclone check failed for {folder.name}.", priority=1)
+        pushover_notify("Nextcloud Verify Failed",
+                 f"Status: Failed\nFolder: {folder.name}\nReason: rclone check failed", priority=1)
         return False
 
     if check.returncode != 0:
@@ -316,8 +317,8 @@ def nextcloud_upload_and_verify(folder: Path, year: str, month: str) -> bool:
             "Nextcloud verification failed for %s (rclone check exit %d) — will retry next run: %s",
             folder.name, check.returncode, check.stderr.strip() if check.stderr else "",
         )
-        pushover_notify("Watchman — Nextcloud Verify Failed",
-                         f"Verification failed for {folder.name} — will retry next run.", priority=1)
+        pushover_notify("Nextcloud Verify Failed",
+                 f"Status: Failed\nFolder: {folder.name}\nRetry: Next retention run", priority=1)
         return False
 
     log.info("Verified %s uploaded to Nextcloud at %s", folder.name, remote_path)
@@ -506,8 +507,9 @@ def run_retention_cleanup(force: bool = False) -> dict:
         if result["errors"] > 0:
             parts.append(f"{result['errors']} error(s)")
         pushover_notify(
-            "Watchman — Retention Cleanup",
-            ", ".join(parts) + ".",
+            "Retention Cleanup",
+            f"Status: {'Completed with errors' if result['errors'] else 'Complete'}\n"
+            + "\n".join(parts),
             priority=1 if result["errors"] > 0 else 0,
         )
 
@@ -932,7 +934,7 @@ def test_notification():
     if not settings["token"] or not settings["user"]:
         return redirect(url_for("settings_page", msg="Set and save your Pushover token/user key first."))
 
-    pushover_notify("Watchman — Test Notification", "This is a test notification from Watchman.")
+    pushover_notify("Test Notification", "Status: Test successful")
     return redirect(url_for("settings_page", msg="Test notification sent — check your device."))
 
 
