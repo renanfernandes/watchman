@@ -18,6 +18,15 @@
             display: flex;
             align-items: center;
             gap: 0.75rem;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+        .header-title {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            min-width: 0;
         }
         header h1 { font-size: 1.4rem; color: #e94560; }
         header span { font-size: 0.85rem; color: #666; }
@@ -175,6 +184,48 @@
         .video-actions { display: flex; gap: 0.5rem; align-items: center; }
         .video-actions a { color: #e94560; text-decoration: none; font-size: 0.85rem; }
         .video-actions a:hover { text-decoration: underline; }
+        .clip-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.6rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding: 0.7rem 0.8rem;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+        }
+        .clip-filters form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+            flex: 1;
+        }
+        .clip-filters input,
+        .clip-filters select,
+        .clip-filters button,
+        .clip-filters a {
+            background: #0a0a1a;
+            color: #e0e0e0;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+            padding: 0.35rem 0.45rem;
+            font-size: 0.82rem;
+        }
+        .clip-filters button {
+            cursor: pointer;
+            background: #e94560;
+            border-color: #e94560;
+        }
+        .clip-filters a {
+            text-decoration: none;
+        }
+        .filter-summary {
+            font-size: 0.8rem;
+            color: #888;
+            margin-left: auto;
+        }
         .btn-delete {
             color: #666;
             background: none;
@@ -400,29 +451,118 @@
             display: none;
         }
         @media (max-width: 768px) {
+            header {
+                padding: 0.8rem 0.9rem;
+                gap: 0.5rem;
+            }
+            .header-title { gap: 0.05rem; }
+            header h1 { font-size: 1.15rem; }
+            header span { font-size: 0.72rem; }
+            .header-link {
+                padding: 0.35rem 0.55rem;
+                font-size: 0.75rem;
+            }
             nav { display: none; }
-            .video-grid { grid-template-columns: 1fr; }
-            main { padding: 1rem; padding-bottom: 5rem; }
+            .video-grid { grid-template-columns: 1fr; gap: 0.75rem; }
+            main { padding: 0.9rem; padding-bottom: 5.5rem; }
+            main h2 {
+                margin-bottom: 0.75rem;
+                font-size: 1rem;
+            }
+            .clip-filters {
+                position: sticky;
+                top: 58px;
+                z-index: 30;
+                padding: 0.65rem;
+                margin-bottom: 0.8rem;
+            }
+            .clip-filters form {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .clip-filters input,
+            .clip-filters select {
+                width: 100%;
+                min-width: 0;
+            }
+            .clip-filters button,
+            .clip-filters a {
+                width: fit-content;
+                align-self: flex-start;
+            }
+            .filter-summary {
+                margin-left: 0;
+                margin-top: 0.25rem;
+                width: 100%;
+            }
+            .video-card { border-radius: 10px; }
+            .video-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.4rem;
+                padding: 0.7rem;
+            }
+            .video-actions {
+                width: 100%;
+                justify-content: flex-end;
+            }
+            .video-actions a,
+            .btn-delete {
+                padding: 0.25rem 0.35rem;
+                min-height: 28px;
+                display: inline-flex;
+                align-items: center;
+            }
 
             /* Floating action button */
             .mob-fab {
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                gap: 0.45rem;
                 position: fixed;
                 bottom: 1.25rem;
                 right: 1.25rem;
-                width: 52px;
-                height: 52px;
-                border-radius: 50%;
+                min-height: 48px;
+                padding: 0 0.9rem;
+                border-radius: 999px;
                 background: #e94560;
                 color: #fff;
-                font-size: 1.3rem;
+                font-size: 0.92rem;
+                font-weight: 700;
                 border: none;
                 cursor: pointer;
                 box-shadow: 0 4px 16px rgba(233,69,96,0.5);
                 z-index: 100;
             }
+            .mob-fab .mob-fab-icon {
+                font-size: 1.1rem;
+                line-height: 1;
+            }
+            .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+        }
+        .today-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.35rem 0.7rem;
+            border-radius: 999px;
+            background: #e94560;
+            color: #fff;
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(233,69,96,0.25);
+        }
+        .today-link:hover {
+            background: #ff5b76;
+            color: #fff;
+        }
 
             /* Sheet overlay */
             .mob-sheet-overlay {
@@ -599,10 +739,16 @@
 </head>
 <body>
     <header>
-        <h1>Watchman</h1>
-        <span>Blink Clip Archive</span>
-        <span class="header-spacer"></span>
-        <a href="/settings" class="header-link">Settings</a>
+        <div class="header-title">
+            <h1>Watchman</h1>
+            <span>Blink Clip Archive</span>
+        </div>
+        <div class="header-actions">
+            {% if today_date %}
+            <a href="/date/{{ today_date }}" class="today-link">↺ Today</a>
+            {% endif %}
+            <a href="/settings" class="header-link">Settings</a>
+        </div>
     </header>
     <div class="layout">
         <nav>
@@ -651,7 +797,29 @@
         </nav>
         <main>
             {% if current_date %}
-                <h2>{{ current_date }} &mdash; {{ videos|length }} clip{{ 's' if videos|length != 1 }}</h2>
+                <h2>{{ current_date }} &mdash; {{ video_visible_count }} clip{{ 's' if video_visible_count != 1 }}</h2>
+                <div class="clip-filters">
+                    <form method="GET" action="/date/{{ current_date }}">
+                        <input type="search" name="q" value="{{ search_query }}" placeholder="Search by camera, time, filename" />
+                        <select name="camera">
+                            <option value="">All cameras</option>
+                            {% for camera_name in camera_options %}
+                            <option value="{{ camera_name }}" {% if selected_camera == camera_name %}selected{% endif %}>{{ camera_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="submit">Filter</button>
+                        {% if search_query or selected_camera %}
+                        <a href="/date/{{ current_date }}">Clear</a>
+                        {% endif %}
+                    </form>
+                    <div class="filter-summary">
+                        {% if search_query or selected_camera %}
+                        Showing {{ video_visible_count }} of {{ video_total_count }} clips
+                        {% else %}
+                        {{ video_total_count }} clip{{ 's' if video_total_count != 1 }} total
+                        {% endif %}
+                    </div>
+                </div>
                 {% if videos %}
                 <form id="bulk-form" method="POST" action="/bulk/{{ current_date }}">
                 <div class="bulk-bar">
@@ -696,16 +864,19 @@
                 </div>
                 </form>
                 {% else %}
-                <p class="empty">No clips for this date</p>
+                <p class="empty">No clips match the current filters. Try clearing the search or camera filter.</p>
                 {% endif %}
             {% else %}
-                <p class="empty">Select a date to browse recordings</p>
+                <p class="empty">No recordings yet. Pick a date once clips start arriving.</p>
             {% endif %}
         </main>
     </div>
 
     <!-- ── Mobile FAB + sheet (hidden on desktop via CSS) ── -->
-    <button class="mob-fab" id="mob-fab" aria-label="Browse dates">📅</button>
+    <button class="mob-fab" id="mob-fab" aria-label="Browse dates">
+        <span class="mob-fab-icon">📅</span>
+        <span>Choose date</span>
+    </button>
     <div class="mob-sheet-overlay" id="mob-overlay"></div>
     <div class="mob-sheet" id="mob-sheet" role="dialog" aria-modal="true">
         <div class="mob-sheet-handle"></div>

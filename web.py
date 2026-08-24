@@ -16,6 +16,7 @@ import threading
 import time
 from datetime import date as _date, datetime as _datetime, timedelta as _timedelta, timezone as _tz
 from pathlib import Path
+from typing import Optional
 from zoneinfo import ZoneInfo as _ZoneInfo
 from flask import Flask, render_template, send_file, abort, request, redirect, url_for, jsonify
 import io
@@ -680,7 +681,7 @@ def safe_filename(filename: str) -> bool:
     return ".." not in filename and "/" not in filename and "\\" not in filename
 
 
-def parse_video_meta(filename: str, ref_date: _date | None = None, date_str: str | None = None) -> dict:
+def parse_video_meta(filename: str, ref_date: Optional[_date] = None, date_str: Optional[str] = None) -> dict:
     """Extract time, camera name, and (if available) duration for a clip.
 
     ref_date should be the clip's actual recording date (not a fixed stand-in
@@ -733,12 +734,14 @@ def index():
     today = _date.today().strftime("%Y-%m-%d")
     if (ARCHIVE_DIR / today).is_dir():
         return redirect(url_for("by_date", date_str=today))
+    today_date = _date.today().strftime("%Y-%m-%d")
     return render_template("index.html",
                            dates=list_dates(), current_date=None, videos=[],
                            dates_map=json.dumps(calendar_status_map()),
                            settings=settings,
                            video_preload=video_settings()["preload"],
-                           status_message=request.args.get("msg", ""))
+                           status_message=request.args.get("msg", ""),
+                           today_date=today_date)
 
 
 @app.route("/date/<date_str>")
@@ -760,17 +763,47 @@ def by_date(date_str: str):
     except ValueError:
         folder_date = _date.today()
 
-    videos = sorted(
+    all_videos = sorted(
         (parse_video_meta(f.name, folder_date, date_str) for f in date_dir.iterdir() if f.suffix == ".mp4"),
         key=lambda v: (v["time"] or "", v["name"]),
         reverse=True,
     )
+
+    search_query = (request.args.get("q", "") or "").strip().lower()
+    selected_camera = (request.args.get("camera", "") or "").strip()
+
+    filtered_videos = []
+    for video in all_videos:
+        if selected_camera and (video.get("camera") or "").lower() != selected_camera.lower():
+            continue
+        if search_query:
+            haystack = " ".join([
+                video.get("name", ""),
+                video.get("camera", ""),
+                video.get("time", ""),
+            ]).lower()
+            if search_query not in haystack:
+                continue
+        filtered_videos.append(video)
+
+    camera_options = sorted(
+        {video["camera"] for video in all_videos if video.get("camera")},
+        key=str.lower,
+    )
+
+    today_date = _date.today().strftime("%Y-%m-%d")
     return render_template("index.html",
-                           dates=list_dates(), current_date=date_str, videos=videos,
+                           dates=list_dates(), current_date=date_str, videos=filtered_videos,
                            dates_map=json.dumps(calendar_status_map()),
                            settings=settings,
                            video_preload=video_settings()["preload"],
-                           status_message=request.args.get("msg", ""))
+                           status_message=request.args.get("msg", ""),
+                           video_total_count=len(all_videos),
+                           video_visible_count=len(filtered_videos),
+                           search_query=search_query,
+                           selected_camera=selected_camera,
+                           camera_options=camera_options,
+                           today_date=today_date)
 
 
 @app.route("/settings")
