@@ -10,6 +10,15 @@ locally for remote access: **no Blink subscription needed.**
 
 ![Watchman Web Interface](watchman.png)
 
+## Release Notes
+
+Recent updates focus on making Watchman feel more polished and operational:
+
+- A new dashboard page with clip counts, archive size, newest clip date, service health, and last sync/import indicators.
+- Search and camera filtering in the clip browser, plus a cleaner mobile-friendly layout.
+- Better empty states for first-run and filtered-no-results scenarios.
+- More reliable setup and deployment flows for both fresh installs and regular updates, including safe service-user creation and remote first-time bootstrap.
+
 ## How It Works
 
 ```
@@ -30,13 +39,16 @@ Blink Camera → Sync Module 2 → [Pi Zero 2W as USB Drive] → Archive → Web
 
 | File | Purpose |
 |---|---|
-| `watchman.py` | Main service, detects, ingests, archives clips, and generates thumbnails |
-| `web.py` | Web interface, browse/play/download archived videos, Nextcloud sync, notifications |
-| `templates/index.html` | Web UI template (lazy-loaded video playback with cached thumbnails) |
-| `templates/settings.html` | Web settings page (retention, Nextcloud sync, and notifications, all editable from the browser) |
+| `watchman.py` | Main service, detects, ingests, archives clips, and updates activity state for the dashboard |
+| `web.py` | Web interface for browsing clips, search/filtering, dashboard views, retention, Nextcloud sync, and notifications |
+| `templates/index.html` | Main clip browser UI with lazy-loaded video playback, filters, bulk actions, and empty states |
+| `templates/dashboard.html` | Dashboard overview with archive stats, service health, and recent activity |
+| `templates/settings.html` | Settings page for retention, Nextcloud sync, notifications, and playback options |
 | `watchman.conf` | All configuration in one place |
-| `setup.sh` | Full automated setup (deps, boot, disk, services, thumbnail backfill) |
+| `setup.sh` | Full automated setup for deps, boot config, disk creation, services, and first-time bootstrap |
+| `deploy.sh` | Deploy code and services to the Pi, including dry-run support and remote first-time install handling |
 | `scripts/create_disk.sh` | Creates the 6GB exFAT virtual disk |
+| `scripts/first-time-install.sh` | Remote bootstrap used by `deploy.sh` for clean installs |
 | `scripts/net-watchdog.sh` | Network watchdog, reboots Pi if internet is lost too long |
 | `scripts/watchman-startup.sh` | Boot diagnostics and Pushover notification |
 | `services/watchman.service` | systemd unit for the ingest service |
@@ -193,7 +205,13 @@ sudo reboot
 - **Watchman** monitors and archives clips
 - **Web UI** available at `http://<pi-ip>:5000`
 
-Once the Pi is back online, open a browser and go to `http://<pi-ip>:5000` to access the Web UI. You should see your archived clips ready to browse, play, and download.
+Once the Pi is back online, open a browser and go to `http://<pi-ip>:5000` to access the clip browser, or `http://<pi-ip>:5000/dashboard` for the new overview page. For future updates from your workstation, run:
+
+```bash
+bash deploy.sh watchman@<pi-ip>
+```
+
+You should see your archived clips ready to browse, play, download, and manage.
 
 ![Watchman Web Interface](watchman.png)
 

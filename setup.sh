@@ -35,6 +35,48 @@ fi
 # Falls back to "watchman" only if run as a true root login with no
 # SUDO_USER set (e.g. logged in directly as root).
 SERVICE_USER="${SUDO_USER:-watchman}"
+TOTAL_STEPS=10
+CURRENT_STEP=0
+
+# Color helpers for clearer setup output.
+if [ -t 1 ] && [ -n "${TERM:-}" ] && [ "$TERM" != "dumb" ]; then
+    COLOR_GREEN=$'\033[32m'
+    COLOR_YELLOW=$'\033[33m'
+    COLOR_BLUE=$'\033[34m'
+    COLOR_RESET=$'\033[0m'
+else
+    COLOR_GREEN=""
+    COLOR_YELLOW=""
+    COLOR_BLUE=""
+    COLOR_RESET=""
+fi
+
+step_header() {
+    CURRENT_STEP=$((CURRENT_STEP + 1))
+    local title="$1"
+    local width=24
+    local filled=$(( CURRENT_STEP * width / TOTAL_STEPS ))
+    local percent=$(( CURRENT_STEP * 100 / TOTAL_STEPS ))
+    local bar=""
+    local remainder=""
+
+    if [ "$filled" -gt 0 ]; then
+        bar=$(printf '%*s' "$filled" '' | tr ' ' '#')
+    fi
+    if [ "$filled" -lt "$width" ]; then
+        remainder=$(printf '%*s' "$((width - filled))" '' | tr ' ' '─')
+    fi
+
+    printf '\n%s[%s%s] %3d%% %d/%d %s%s\n' "$COLOR_BLUE" "$bar" "$remainder" "$percent" "$CURRENT_STEP" "$TOTAL_STEPS" "$title" "$COLOR_RESET"
+}
+
+step_ok() {
+    printf '%b\n' "${COLOR_GREEN}[OK]${COLOR_RESET} $1"
+}
+
+step_warn() {
+    printf '%b\n' "${COLOR_YELLOW}[WARN]${COLOR_RESET} $1"
+}
 
 # Detect boot directory (Bookworm = /boot/firmware, Bullseye = /boot)
 if [ -f /boot/firmware/config.txt ]; then
@@ -52,10 +94,26 @@ echo "Install dir: $INSTALL_DIR"
 echo "Config:      $CONFIG_FILE"
 echo "Service user: $SERVICE_USER"
 echo ""
+step_header "Preparing installation"
+
+# Create the service user on first-time installs only. This is conservative:
+# if the user already exists we leave it alone, and if the requested name is
+# invalid we fail safely rather than guessing.
+if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
+    echo "[0/9] Creating service user '$SERVICE_USER'..."
+    if getent passwd "$SERVICE_USER" >/dev/null 2>&1; then
+        echo "  User '$SERVICE_USER' already exists; continuing"
+    else
+        useradd --create-home --shell /bin/bash "$SERVICE_USER"
+        echo "  Created user '$SERVICE_USER'"
+    fi
+    step_ok "Service user ready"
+    echo ""
+fi
 
 # ── Step 1: Install dependencies ────────────────────────────────────────────
 
-echo "[1/9] Installing dependencies..."
+step_header "Installing dependencies..."
 apt-get update -qq
 apt-get install -y -qq python3 python3-flask exfatprogs fdisk util-linux watchdog ffmpeg parted
 # Enable persistent journal so logs survive reboots
@@ -64,23 +122,23 @@ chown root:systemd-journal /var/log/journal
 chmod 2755 /var/log/journal
 systemd-tmpfiles --create --prefix /var/log/journal
 systemctl restart systemd-journald
-echo "[OK] Dependencies installed"
+step_ok "Dependencies installed"
 echo ""
 
 # ── Step 2: Disable WiFi power save ─────────────────────────────────────────────
 
-echo "[2/9] Disabling WiFi power save..."
+step_header "Disabling WiFi power save..."
 mkdir -p /etc/NetworkManager/conf.d
 cat > /etc/NetworkManager/conf.d/wifi-powersave-off.conf << 'NM_EOF'
 [connection]
 wifi.powersave = 2
 NM_EOF
-echo "[OK] WiFi power save disabled via NetworkManager"
+step_ok "WiFi power save disabled via NetworkManager"
 echo ""
 
 # ── Step 3: Configure boot for USB gadget mode ───────────────────────────
 
-echo "[3/9] Configuring boot files for USB gadget mode..."
+step_header "Configuring boot files for USB gadget mode..."
 # config.txt — enable the dwc2 USB controller in peripheral (gadget) mode.
 # The overlay MUST be in the [all] section so it applies to every Pi model.
 # Remove any dwc2 overlay lines from model-specific sections first.
@@ -111,12 +169,12 @@ else
     echo "  modules-load=dwc2 already present in cmdline.txt"
 fi
 
-echo "[OK] Boot configured"
+step_ok "Boot configured"
 echo ""
 
 # ── Step 4: Install Watchman files ──────────────────────────────────────────
 
-echo "[4/9] Installing Watchman..."
+step_header "Installing Watchman files..."
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
 
 cp "$SCRIPT_DIR/watchman.py" "$INSTALL_DIR/"
@@ -145,7 +203,7 @@ else
     echo "  Config already exists at $CONFIG_FILE (not overwriting)"
 fi
 
-echo "[OK] Files installed"
+step_ok "Files installed"
 echo ""
 
 # On a fresh install only, point ARCHIVE_DIR at the detected user's actual
@@ -181,7 +239,7 @@ echo ""
 
 # ── Step 5: Create virtual disk ─────────────────────────────────────────────
 
-echo "[5/9] Setting up GhostDrive..."
+step_header "Setting up GhostDrive..."
 
 # Source config values
 CONTAINER="/ghostdrive.bin"
@@ -203,12 +261,12 @@ else
     bash "$SCRIPT_DIR/scripts/create_disk.sh" "$CONFIG_FILE"
 fi
 
-echo "[OK] GhostDrive ready"
+step_ok "GhostDrive ready"
 echo ""
 
 # ── Step 6: Create directories ──────────────────────────────────────────────
 
-echo "[6/9] Creating directories..."
+step_header "Creating directories..."
 
 ARCHIVE_DIR="/home/$SERVICE_USER/archive"
 MOUNT_POINT="/mnt/ghostdrive"
@@ -231,7 +289,7 @@ else
     echo "  WARNING: user '$SERVICE_USER' not found — leaving $ARCHIVE_DIR ownership as-is"
 fi
 
-echo "[OK] Directories created"
+step_ok "Directories created"
 echo ""
 
 # Backfill thumbnails and duration metadata for any clips already in the
@@ -277,7 +335,7 @@ echo ""
 
 # ── Step 7: Install systemd services ────────────────────────────────────────
 
-echo "[7/9] Installing systemd services..."
+step_header "Installing systemd services..."
 
 cp "$SCRIPT_DIR/services/watchman.service" /etc/systemd/system/
 # watchman-web.service runs as a non-root user for least-privilege — swap
@@ -307,12 +365,12 @@ if ! visudo -c -f "$SUDOERS_FILE" > /dev/null 2>&1; then
     rm -f "$SUDOERS_FILE"
 fi
 
-echo "[OK] Services installed and enabled"
+step_ok "Services installed and enabled"
 echo ""
 
 # ── Step 8: Configure hardware watchdog ─────────────────────────────────────
 
-echo "[8/9] Configuring hardware watchdog..."
+step_header "Configuring hardware watchdog..."
 
 # Enable the hardware watchdog timer in boot config
 if ! grep -q "dtparam=watchdog=on" "$BOOT_DIR/config.txt"; then
@@ -332,12 +390,12 @@ WATCHDOG_EOF
 systemctl enable watchdog
 systemctl start watchdog
 
-echo "[OK] Hardware watchdog configured (60s timeout)"
+step_ok "Hardware watchdog configured (60s timeout)"
 echo ""
 
 # ── Step 9: Install network watchdog ────────────────────────────────────────
 
-echo "[9/9] Installing network watchdog..."
+step_header "Installing network watchdog..."
 
 # Read NET_WATCHDOG_ENABLED from config
 NET_WATCHDOG_ENABLED="yes"
@@ -356,16 +414,16 @@ systemctl daemon-reload
 
 if [ "$NET_WATCHDOG_ENABLED" = "yes" ]; then
     systemctl enable --now watchman-net.service
-    echo "[OK] Network watchdog enabled and started"
+    step_ok "Network watchdog enabled and started"
 else
     systemctl disable watchman-net.service 2>/dev/null || true
-    echo "[OK] Network watchdog installed but disabled (NET_WATCHDOG_ENABLED=no)"
+    step_ok "Network watchdog installed but disabled (NET_WATCHDOG_ENABLED=no)"
 fi
 echo ""
 
 # ── Step 9: Schedule monthly reboot ─────────────────────────────────────────
 
-echo "[9/9] Scheduling monthly reboot..."
+step_header "Scheduling monthly reboot..."
 
 CRON_JOB="0 3 1 * * /sbin/reboot"
 CRON_MARKER="# Watchman: monthly reboot"
@@ -381,14 +439,16 @@ echo ""
 
 # ── Done ────────────────────────────────────────────────────────────────────
 
-echo "=== Setup Complete ==="
+echo ""
+echo "${COLOR_GREEN}=== Setup Complete ===${COLOR_RESET}"
 echo ""
 echo "  Config:    $CONFIG_FILE"
 echo "  Container: $CONTAINER"
 echo "  Archive:   $ARCHIVE_DIR"
 echo "  Web UI:    http://<pi-ip>:5000"
 echo ""
-echo "  REBOOT REQUIRED to activate USB gadget mode."
-echo "  After reboot, both services start automatically."
+echo "  Next steps:"
+echo "    1. Reboot the Pi to activate USB gadget mode"
+echo "    2. Check the services with: sudo systemctl status watchman watchman-web"
+echo "    3. Open the web UI once the Pi is back online"
 echo ""
-echo "  sudo reboot"

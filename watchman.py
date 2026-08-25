@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 log = logging.getLogger("watchman")
+ACTIVITY_STATE_PATH = "/tmp/watchman_activity_state.json"
 
 
 # ── Configuration ───────────────────────────────────────────────────────────
@@ -61,6 +62,23 @@ def load_config(path: str) -> dict:
             key, value = line.split("=", 1)
             config[key.strip()] = value.strip()
     return config
+
+
+def update_activity_state(last_sync: Optional[str] = None, last_import: Optional[str] = None) -> None:
+    """Persist lightweight activity timestamps for the web dashboard."""
+    data = {}
+    state_path = Path(ACTIVITY_STATE_PATH)
+    if state_path.exists():
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+    if last_sync is not None:
+        data["last_sync"] = last_sync
+    if last_import is not None:
+        data["last_import"] = last_import
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps(data), encoding="utf-8")
 
 
 def pushover_notify(cfg: dict, title: str, message: str, priority: int = 0) -> None:
@@ -121,7 +139,7 @@ def connectivity_snapshot() -> dict:
     return data
 
 
-def log_connectivity(log_path: str, event: str, extra: dict | None = None) -> None:
+def log_connectivity(log_path: str, event: str, extra: Optional[dict] = None) -> None:
     """Append a connectivity event as a JSON line to the log file."""
     entry = connectivity_snapshot()
     entry["event"] = event
@@ -209,7 +227,7 @@ def usb_reset(module: str, container: str) -> bool:
 
 # Tracks the loop device attached during an ingest cycle so unmount can
 # detach it.  Single-threaded, so a module-level variable is safe.
-_loop_dev: str | None = None
+_loop_dev: Optional[str] = None
 
 
 def mount_container(container: str, mount_point: str) -> bool:
@@ -365,6 +383,7 @@ def archive_video(src: Path, archive_dir: Path, service_user: str = "watchman") 
         except Exception as e:
             log.warning("Could not chown archived file to '%s': %s", service_user, e)
 
+        update_activity_state(last_import=datetime.now().isoformat())
         log.info("Archived: %s -> %s", src.name, dest)
         return True
     except Exception as e:
@@ -402,6 +421,7 @@ def ingest(container: str, mount_point: str, archive_dir: str,
         for video in videos:
             if archive_video(video, Path(archive_dir), service_user):
                 archived += 1
+        update_activity_state(last_sync=datetime.now().isoformat())
         return archived
 
     finally:
