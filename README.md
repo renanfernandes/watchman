@@ -59,7 +59,29 @@ Blink Camera → Sync Module 2 → [Pi Zero 2W as USB Drive] → Archive → Web
 > Note: `deploy.sh`, `troubleshoot.sh`, and `scripts/notify-when-online.sh` are referenced in older docs/instructions but aren't part of this repo, ignore any steps that mention them.
 
 
-## Hardware
+## Getting Started
+
+### Quick Setup
+
+> **Before you begin:** Make sure the Pi is physically connected to the Blink Sync Module 2 and powered. See the hardware notes below if you need wiring details.
+
+SSH into your Pi, clone the repo, and run the setup script:
+
+```bash
+ssh alexpi@<pi-ip>
+git clone https://github.com/renanfernandes/watchman.git ~/watchman
+cd ~/watchman
+sudo bash setup.sh
+sudo reboot
+```
+
+After setup, open the web UI at `http://<pi-ip>:5000` to browse clips, or visit `http://<pi-ip>:5000/dashboard` for the overview page. For future updates from your workstation, run:
+
+```bash
+bash deploy.sh watchman@<pi-ip>
+```
+
+### Hardware
 
 - Raspberry Pi Zero 2 W (or any Raspberry Pi, honestly), **If a Raspberry Pi 5**,
   see [Raspberry Pi 5 Notes](#raspberry-pi-5-notes) below for extra setup steps
