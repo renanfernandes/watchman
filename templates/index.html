@@ -28,9 +28,24 @@
             gap: 0.15rem;
             min-width: 0;
         }
+        .brand-link {
+            color: inherit;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+        .brand-link:hover h1 {
+            color: #ff6b81;
+        }
         header h1 { font-size: 1.4rem; color: #e94560; }
         header span { font-size: 0.85rem; color: #666; }
-        .header-spacer { margin-left: auto; }
+        .header-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
         .header-link {
             color: #aaa;
             text-decoration: none;
@@ -121,7 +136,20 @@
             padding: 1.5rem;
         }
         main h2 { margin-bottom: 1rem; color: #e94560; }
-        .empty { color: #555; font-style: italic; margin-top: 2rem; }
+        .empty {
+            color: #8da0c2;
+            font-style: normal;
+            margin-top: 2rem;
+            padding: 1.25rem;
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            line-height: 1.6;
+        }
+        .empty strong { color: #e0e0e0; }
+        .empty ul { margin: 0.65rem 0 0 1.1rem; color: #cfd9ee; }
+        .empty a { color: #e94560; text-decoration: none; }
+        .empty a:hover { text-decoration: underline; }
         .video-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -740,13 +768,13 @@
 <body>
     <header>
         <div class="header-title">
-            <h1>Watchman</h1>
-            <span>Blink Clip Archive</span>
+            <a href="{{ request.url_root }}" class="brand-link">
+                <h1>Watchman</h1>
+                <span>Blink Clip Archive</span>
+            </a>
         </div>
         <div class="header-actions">
-            {% if today_date %}
-            <a href="/date/{{ today_date }}" class="today-link">↺ Today</a>
-            {% endif %}
+            <a href="/dashboard" class="header-link">Dashboard</a>
             <a href="/settings" class="header-link">Settings</a>
         </div>
     </header>
@@ -792,7 +820,10 @@
                 </div>
                 {% endfor %}
             {% else %}
-                <p class="empty">No recordings yet</p>
+                <div class="empty">
+                    <strong>No clips have been archived yet.</strong>
+                    <div style="margin-top:0.4rem;">Once the Pi begins receiving Blink motion clips, their dates will appear here.</div>
+                </div>
             {% endif %}
         </nav>
         <main>
@@ -864,10 +895,16 @@
                 </div>
                 </form>
                 {% else %}
-                <p class="empty">No clips match the current filters. Try clearing the search or camera filter.</p>
+                <div class="empty">
+                    <strong>No clips match the current filters.</strong>
+                    <div style="margin-top:0.4rem;">Try clearing the search or camera filter to see the full set for this day.</div>
+                </div>
                 {% endif %}
             {% else %}
-                <p class="empty">No recordings yet. Pick a date once clips start arriving.</p>
+                <div class="empty">
+                    <strong>No clips have been archived yet.</strong>
+                    <div style="margin-top:0.4rem;">Choose a date once clips start arriving, or check the dashboard for service status.</div>
+                </div>
             {% endif %}
         </main>
     </div>

@@ -37,7 +37,6 @@ _LOCAL_TZ = _local_tz()
 log = logging.getLogger("watchman-web")
 
 app = Flask(__name__)
-ARCHIVE_DIR = Path("/home/watchman/archive")
 CONFIG_PATH = "watchman.conf"
 RETENTION_STATE_FILE = Path("/tmp/watchman_retention_state.json")
 RETENTION_HISTORY_FILE = Path("/tmp/watchman_retention_history.json")
@@ -93,6 +92,12 @@ def _reject_cross_origin_writes():
         abort(403)
 
     return None
+
+
+def archive_dir() -> Path:
+    """Return the configured archive directory for the current runtime."""
+    cfg = load_config(CONFIG_PATH)
+    return Path(cfg.get("ARCHIVE_DIR", "/home/watchman/archive")).expanduser()
 
 
 def load_config(path: str) -> dict:
@@ -668,6 +673,138 @@ def calendar_status_map() -> dict:
     return result
 
 
+def human_size(num_bytes: int) -> str:
+    """Format a byte count for display."""
+    units = ["B", "KiB", "MiB", "GiB", "TiB"]
+    size = float(num_bytes)
+    unit_index = 0
+    while size >= 1024 and unit_index < len(units) - 1:
+        size /= 1024
+        unit_index += 1
+    if unit_index == 0:
+        return f"{int(size)} {units[unit_index]}"
+    return f"{size:.1f} {units[unit_index]}"
+
+
+def format_activity_timestamp(value: Optional[str]) -> str:
+    """Render an ISO timestamp as a compact human-readable string."""
+    if not value:
+        return "Never"
+    try:
+        dt = _datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if dt.tzinfo is not None:
+            dt = dt.astimezone()
+        return dt.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return value
+
+
+def load_activity_state() -> dict:
+    """Read the latest ingest/import timestamps for the dashboard."""
+    state_path = Path("/tmp/watchman_activity_state.json")
+    state = {"last_sync": None, "last_import": None}
+
+    if state_path.exists():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+        except Exception:
+            state = {"last_sync": None, "last_import": None}
+
+    archive_path = archive_dir()
+    if archive_path.exists():
+        clips = [p for p in archive_path.rglob("*.mp4") if p.is_file()]
+        if clips:
+            latest_mtime = max((p.stat().st_mtime for p in clips if p.exists()), default=None)
+            if latest_mtime is not None:
+                timestamp = _datetime.fromtimestamp(latest_mtime).isoformat()
+                if not state.get("last_import"):
+                    state["last_import"] = timestamp
+                if not state.get("last_sync"):
+                    state["last_sync"] = timestamp
+
+    return state
+
+
+def dashboard_stats() -> dict:
+    """Collect a small summary of the archive state for the dashboard."""
+    archive_path = archive_dir()
+    clip_files = []
+    if archive_path.exists():
+        clip_files = [p for p in archive_path.rglob("*.mp4") if p.is_file()]
+
+    total_bytes = sum(p.stat().st_size for p in clip_files if p.exists())
+    date_count = 0
+    latest_date = None
+    if archive_path.exists():
+        date_dirs = [p for p in archive_path.iterdir() if p.is_dir() and safe_date(p.name)]
+        date_dirs.sort(key=lambda p: p.name, reverse=True)
+        date_count = len(date_dirs)
+        if date_dirs:
+            latest_date = date_dirs[0].name
+
+    disk_usage = shutil.disk_usage("/")
+    activity = load_activity_state()
+    return {
+        "clip_count": len(clip_files),
+        "size_text": human_size(total_bytes),
+        "date_count": date_count,
+        "latest_date": latest_date,
+        "disk_usage_text": human_size(disk_usage.used),
+        "last_sync": format_activity_timestamp(activity.get("last_sync")),
+        "last_import": format_activity_timestamp(activity.get("last_import")),
+    }
+
+
+def recent_clips(limit: int = 8) -> list[dict]:
+    """Return the most recently modified clips for the dashboard."""
+    items = []
+    archive_path = archive_dir()
+    if not archive_path.exists():
+        return items
+
+    for clip_path in archive_path.rglob("*.mp4"):
+        if not clip_path.is_file():
+            continue
+        try:
+            stat = clip_path.stat()
+        except OSError:
+            continue
+        items.append({
+            "path": clip_path,
+            "name": clip_path.name,
+            "date": clip_path.parent.name,
+            "size_text": human_size(stat.st_size),
+            "mtime": stat.st_mtime,
+        })
+
+    items.sort(key=lambda item: item["mtime"], reverse=True)
+    return items[:limit]
+
+
+def service_statuses() -> list[dict]:
+    """Check a few core services and return friendly status rows."""
+    services = ["watchman", "watchman-web", "watchman-net", "watchman-startup"]
+    rows = []
+    for name in services:
+        try:
+            result = subprocess.run(
+                ["systemctl", "is-active", name],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            state = (result.stdout or "").strip().lower()
+            label = "active" if state == "active" else "inactive" if state in {"inactive", "failed", "dead"} else "unknown"
+            rows.append({
+                "name": name,
+                "state": label,
+                "state_label": state or "unknown",
+            })
+        except Exception:
+            rows.append({"name": name, "state": "unknown", "state_label": "unknown"})
+    return rows
+
+
 def safe_date(date_str: str) -> bool:
     """Validate date string is exactly YYYY-MM-DD format."""
     return (
@@ -734,14 +871,12 @@ def index():
     today = _date.today().strftime("%Y-%m-%d")
     if (ARCHIVE_DIR / today).is_dir():
         return redirect(url_for("by_date", date_str=today))
-    today_date = _date.today().strftime("%Y-%m-%d")
     return render_template("index.html",
                            dates=list_dates(), current_date=None, videos=[],
                            dates_map=json.dumps(calendar_status_map()),
                            settings=settings,
                            video_preload=video_settings()["preload"],
-                           status_message=request.args.get("msg", ""),
-                           today_date=today_date)
+                           status_message=request.args.get("msg", ""))
 
 
 @app.route("/date/<date_str>")
@@ -791,7 +926,6 @@ def by_date(date_str: str):
         key=str.lower,
     )
 
-    today_date = _date.today().strftime("%Y-%m-%d")
     return render_template("index.html",
                            dates=list_dates(), current_date=date_str, videos=filtered_videos,
                            dates_map=json.dumps(calendar_status_map()),
@@ -802,8 +936,19 @@ def by_date(date_str: str):
                            video_visible_count=len(filtered_videos),
                            search_query=search_query,
                            selected_camera=selected_camera,
-                           camera_options=camera_options,
-                           today_date=today_date)
+                           camera_options=camera_options)
+
+
+@app.route("/dashboard")
+def dashboard_page():
+    """Show a lightweight operational overview of archive health and services."""
+    stats = dashboard_stats()
+    return render_template(
+        "dashboard.html",
+        archive_stats=stats,
+        services=service_statuses(),
+        recent_clips=recent_clips(),
+    )
 
 
 @app.route("/settings")

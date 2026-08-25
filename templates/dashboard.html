@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Watchman Clips</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+        }
+        header {
+            background: #16213e;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #0f3460;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+        .header-title {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+            min-width: 0;
+        }
+        .brand-link {
+            color: inherit;
+            text-decoration: none;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.15rem;
+        }
+        .brand-link:hover h1 {
+            color: #ff6b81;
+        }
+        header h1 { font-size: 1.4rem; color: #e94560; }
+        header span { font-size: 0.85rem; color: #666; }
+        .header-actions {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .header-link {
+            color: #aaa;
+            text-decoration: none;
+            font-size: 0.82rem;
+            border: 1px solid #0f3460;
+            border-radius: 5px;
+            padding: 0.25rem 0.55rem;
+        }
+        .header-link:hover {
+            color: #e0e0e0;
+            background: #0f3460;
+        }
+        main {
+            max-width: 1080px;
+            margin: 1.5rem auto;
+            padding: 0 1rem 2rem;
+        }
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .card {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .card h2 {
+            font-size: 0.9rem;
+            color: #888;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .metric {
+            font-size: 1.45rem;
+            font-weight: 700;
+            color: #e0e0e0;
+        }
+        .subtle {
+            margin-top: 0.35rem;
+            color: #8da0c2;
+            font-size: 0.82rem;
+        }
+        .panel {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .panel h3 {
+            font-size: 1rem;
+            color: #e94560;
+            margin-bottom: 0.8rem;
+        }
+        .status-list {
+            display: grid;
+            gap: 0.5rem;
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.55rem 0.65rem;
+            background: #0f1b35;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .status-pill.active {
+            background: rgba(27, 155, 86, 0.2);
+            color: #7ee383;
+        }
+        .status-pill.inactive {
+            background: rgba(255, 107, 129, 0.18);
+            color: #ff8fa3;
+        }
+        .status-pill.unknown {
+            background: rgba(255, 193, 7, 0.18);
+            color: #f6d365;
+        }
+        .clip-list {
+            display: grid;
+            gap: 0.45rem;
+        }
+        .clip-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.6rem 0.7rem;
+            background: #0f1b35;
+            border-radius: 6px;
+            color: #cfd9ee;
+            font-size: 0.88rem;
+        }
+        .clip-item .name {
+            font-weight: 600;
+            color: #e0e0e0;
+        }
+        .muted {
+            color: #89a0c8;
+            font-size: 0.82rem;
+        }
+        .empty {
+            padding: 1rem;
+            border-radius: 8px;
+            background: #0f1b35;
+            border: 1px dashed #0f3460;
+            color: #8da0c2;
+            line-height: 1.6;
+        }
+        .empty strong { color: #e0e0e0; }
+        @media (max-width: 640px) {
+            header { padding: 1rem; }
+            .clip-item { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-title">
+            <a href="{{ request.url_root }}" class="brand-link">
+                <h1>Watchman</h1>
+                <span>Clips</span>
+            </a>
+        </div>
+        <div class="header-actions">
+            <a href="/" class="header-link">Clips</a>
+            <a href="/settings" class="header-link">Settings</a>
+        </div>
+    </header>
+
+    <main>
+        <div class="cards">
+            <div class="card">
+                <h2>Clips</h2>
+                <div class="metric">{{ archive_stats.clip_count }}</div>
+                <div class="subtle">Stored in archive</div>
+            </div>
+            <div class="card">
+                <h2>Archive size</h2>
+                <div class="metric">{{ archive_stats.size_text }}</div>
+                <div class="subtle">Across {{ archive_stats.date_count }} days</div>
+            </div>
+            <div class="card">
+                <h2>Newest clip</h2>
+                <div class="metric">{{ archive_stats.latest_date or 'None yet' }}</div>
+                <div class="subtle">Most recent recording</div>
+            </div>
+            <div class="card">
+                <h2>Last sync</h2>
+                <div class="metric">{{ archive_stats.last_sync }}</div>
+                <div class="subtle">Last ingest cycle</div>
+            </div>
+            <div class="card">
+                <h2>Last import</h2>
+                <div class="metric">{{ archive_stats.last_import }}</div>
+                <div class="subtle">Last clip archived</div>
+            </div>
+            <div class="card">
+                <h2>Disk usage</h2>
+                <div class="metric">{{ archive_stats.disk_usage_text }}</div>
+                <div class="subtle">Root filesystem</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Service status</h3>
+            <div class="status-list">
+                {% for service in services %}
+                <div class="status-row">
+                    <span>{{ service.name }}</span>
+                    <span class="status-pill {{ service.state }}">{{ service.state_label }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Recently added clips</h3>
+            {% if recent_clips %}
+            <div class="clip-list">
+                {% for clip in recent_clips %}
+                <div class="clip-item">
+                    <div>
+                        <div class="name">{{ clip.name }}</div>
+                        <div class="muted">{{ clip.date }}</div>
+                    </div>
+                    <div class="muted">{{ clip.size_text }}</div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty">
+                <strong>No clips have been archived yet.</strong>
+                <div class="muted" style="margin-top:0.35rem;">Once the Pi starts receiving Blink motion clips, they’ll appear here automatically.</div>
+            </div>
+            {% endif %}
+        </div>
+    </main>
+</body>
+</html>
