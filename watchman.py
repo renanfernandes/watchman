@@ -25,6 +25,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 log = logging.getLogger("watchman")
 ACTIVITY_STATE_PATH = "/tmp/watchman_activity_state.json"

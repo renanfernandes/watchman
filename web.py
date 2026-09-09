@@ -183,6 +183,19 @@ def retention_settings() -> dict:
     }
 
 
+def resolve_clip_path(date_str: str, filename: str) -> Optional[Path]:
+    """Return the Path of a clip, checking ARCHIVE_DIR then the retention archive."""
+    primary = ARCHIVE_DIR / date_str / filename
+    if primary.exists():
+        return primary
+    retention_base = retention_settings().get("archive_dir", "")
+    if retention_base:
+        secondary = Path(retention_base).expanduser() / date_str / filename
+        if secondary.exists():
+            return secondary
+    return None
+
+
 def nextcloud_settings() -> dict:
     """Read Nextcloud/rclone sync settings from config file."""
     cfg = load_config(CONFIG_PATH)
@@ -670,6 +683,17 @@ def calendar_status_map() -> dict:
         if archived > 0 or deleted > 0:
             result[date_str] = {"count": 0, "had_old": True}
 
+    # Also scan the retention archive dir to catch dates moved before history tracking.
+    retention_base = retention_settings().get("archive_dir", "")
+    if retention_base:
+        retention_path = Path(retention_base).expanduser()
+        if retention_path.exists():
+            for folder in retention_path.iterdir():
+                if not folder.is_dir() or not safe_date(folder.name):
+                    continue
+                if folder.name not in result:
+                    result[folder.name] = {"count": 0, "had_old": True}
+
     return result
 
 
@@ -742,6 +766,17 @@ def dashboard_stats() -> dict:
         if date_dirs:
             latest_date = date_dirs[0].name
 
+    # Retention archive stats
+    retention_base = retention_settings().get("archive_dir", "")
+    archived_clip_count = 0
+    archived_bytes = 0
+    if retention_base:
+        retention_path = Path(retention_base).expanduser()
+        if retention_path.exists():
+            archived_clips = [p for p in retention_path.rglob("*.mp4") if p.is_file()]
+            archived_clip_count = len(archived_clips)
+            archived_bytes = sum(p.stat().st_size for p in archived_clips if p.exists())
+
     disk_usage = shutil.disk_usage("/")
     activity = load_activity_state()
     return {
@@ -752,6 +787,8 @@ def dashboard_stats() -> dict:
         "disk_usage_text": human_size(disk_usage.used),
         "last_sync": format_activity_timestamp(activity.get("last_sync")),
         "last_import": format_activity_timestamp(activity.get("last_import")),
+        "archived_clip_count": archived_clip_count,
+        "archived_size_text": human_size(archived_bytes),
     }
 
 
@@ -888,9 +925,22 @@ def by_date(date_str: str):
         abort(400)
 
     date_dir = ARCHIVE_DIR / date_str
+    is_archived_copy = False
+    clip_base = ARCHIVE_DIR
+
     if not date_dir.exists() or not date_dir.is_dir():
-        abort(404)
-    if not date_dir.resolve().is_relative_to(ARCHIVE_DIR.resolve()):
+        # Fall back to the retention archive directory for yellow-dot dates.
+        retention_base = settings.get("archive_dir", "")
+        if retention_base:
+            retention_date_dir = Path(retention_base).expanduser() / date_str
+            if retention_date_dir.exists() and retention_date_dir.is_dir():
+                date_dir = retention_date_dir
+                clip_base = retention_date_dir.parent
+                is_archived_copy = True
+        if not is_archived_copy:
+            abort(404)
+
+    if not date_dir.resolve().is_relative_to(clip_base.resolve()):
         abort(403)
 
     try:
@@ -936,7 +986,8 @@ def by_date(date_str: str):
                            video_visible_count=len(filtered_videos),
                            search_query=search_query,
                            selected_camera=selected_camera,
-                           camera_options=camera_options)
+                           camera_options=camera_options,
+                           is_archived=is_archived_copy)
 
 
 @app.route("/dashboard")
@@ -1220,10 +1271,8 @@ def serve_video(date_str: str, filename: str):
     if not safe_date(date_str) or not safe_filename(filename):
         abort(400)
 
-    video_path = ARCHIVE_DIR / date_str / filename
-    if not video_path.resolve().is_relative_to(ARCHIVE_DIR.resolve()):
-        abort(403)
-    if not video_path.exists() or video_path.suffix != ".mp4":
+    video_path = resolve_clip_path(date_str, filename)
+    if video_path is None or video_path.suffix != ".mp4":
         abort(404)
 
     return send_file(video_path, mimetype="video/mp4")
@@ -1235,10 +1284,8 @@ def download_video(date_str: str, filename: str):
     if not safe_date(date_str) or not safe_filename(filename):
         abort(400)
 
-    video_path = ARCHIVE_DIR / date_str / filename
-    if not video_path.resolve().is_relative_to(ARCHIVE_DIR.resolve()):
-        abort(403)
-    if not video_path.exists() or video_path.suffix != ".mp4":
+    video_path = resolve_clip_path(date_str, filename)
+    if video_path is None or video_path.suffix != ".mp4":
         abort(404)
 
     return send_file(video_path, as_attachment=True)

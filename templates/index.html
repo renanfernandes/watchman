@@ -136,6 +136,19 @@
             padding: 1.5rem;
         }
         main h2 { margin-bottom: 1rem; color: #e94560; }
+        .archived-banner {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            background: rgba(242, 201, 76, 0.10);
+            border: 1px solid rgba(242, 201, 76, 0.35);
+            border-radius: 7px;
+            color: #f2c94c;
+            font-size: 0.86rem;
+            padding: 0.55rem 0.9rem;
+            margin-bottom: 1rem;
+        }
+        .archived-banner svg { flex-shrink: 0; }
         .empty {
             color: #8da0c2;
             font-style: normal;
@@ -450,6 +463,7 @@
             color: #c7c7a5;
             font-weight: 600;
             position: relative;
+            cursor: pointer;
         }
         .nav-cal-cell.had::after {
             content: '';
@@ -463,6 +477,7 @@
             background: #f2c94c;
         }
         .nav-cal-cell.has:hover { background: #0f3460; }
+        .nav-cal-cell.had:hover { background: #1a1f35; }
         .nav-cal-cell.sel {
             background: #e94560;
             color: #fff;
@@ -739,6 +754,7 @@
             .mob-cal-day.had-clips {
                 color: #c7c7a5;
                 font-weight: 600;
+                cursor: pointer;
             }
             .mob-cal-day.had-clips::after {
                 content: '';
@@ -752,6 +768,7 @@
                 background: #f2c94c;
             }
             .mob-cal-day.has-clips:active { background: #0f3460; }
+            .mob-cal-day.had-clips:active { background: #1a1f35; }
             .mob-cal-day.selected {
                 background: #e94560;
                 color: #fff;
@@ -829,6 +846,12 @@
         <main>
             {% if current_date %}
                 <h2>{{ current_date }} &mdash; {{ video_visible_count }} clip{{ 's' if video_visible_count != 1 }}</h2>
+                {% if is_archived | default(false) %}
+                <div class="archived-banner">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+                    Archived videos &mdash; these clips have been moved to the long-term archive.
+                </div>
+                {% endif %}
                 <div class="clip-filters">
                     <form method="GET" action="/date/{{ current_date }}">
                         <input type="search" name="q" value="{{ search_query }}" placeholder="Search by camera, time, filename" />
@@ -1080,7 +1103,10 @@
                             window.location.href = '/date/' + ds;
                         });
                     } else if (hasHistory) {
-                        cell.title = 'Clips were archived/deleted for this date';
+                        cell.title = 'Archived clips — click to view';
+                        cell.addEventListener('click', function () {
+                            window.location.href = '/date/' + ds;
+                        });
                     }
                     grid.appendChild(cell);
                 }
@@ -1142,6 +1168,10 @@
                     cell.className = cls.join(' ');
                     cell.textContent = d;
                     if (hasCurrent) {
+                        cell.addEventListener('click', function () {
+                            window.location.href = '/date/' + ds;
+                        });
+                    } else if (hasHistory) {
                         cell.addEventListener('click', function () {
                             window.location.href = '/date/' + ds;
                         });

@@ -202,9 +202,19 @@
                 <div class="subtle">Stored in archive</div>
             </div>
             <div class="card">
-                <h2>Archive size</h2>
+                <h2>Clip size</h2>
                 <div class="metric">{{ archive_stats.size_text }}</div>
                 <div class="subtle">Across {{ archive_stats.date_count }} days</div>
+            </div>
+            <div class="card">
+                <h2>Archived clips</h2>
+                <div class="metric">{{ archive_stats.archived_clip_count }}</div>
+                <div class="subtle">Moved to long-term archive</div>
+            </div>
+            <div class="card">
+                <h2>Archived size</h2>
+                <div class="metric">{{ archive_stats.archived_size_text }}</div>
+                <div class="subtle">Long-term archive total</div>
             </div>
             <div class="card">
                 <h2>Newest clip</h2>
