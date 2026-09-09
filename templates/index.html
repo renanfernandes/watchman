@@ -277,6 +277,18 @@
             padding: 0;
         }
         .btn-delete:hover { color: #e94560; text-decoration: underline; }
+        .btn-star {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0;
+            line-height: 1;
+            color: #444;
+            transition: color 0.15s;
+        }
+        .btn-star.starred { color: #f2c94c; }
+        .btn-star:hover { color: #f2c94c; }
         .video-check {
             padding: 0.5rem 0.75rem 0;
             display: flex;
@@ -791,6 +803,7 @@
             </a>
         </div>
         <div class="header-actions">
+            <a href="/starred" class="header-link">&#9733; Starred</a>
             <a href="/dashboard" class="header-link">Dashboard</a>
             <a href="/settings" class="header-link">Settings</a>
         </div>
@@ -908,6 +921,13 @@
                                 <br><span style="font-size:0.72rem;color:#555">{{ video.name }}</span>
                             </span>
                             <div class="video-actions">
+                                {% set is_starred = video.name in (starred_names | default([])) %}
+                                <button type="button"
+                                        class="btn-star{{ ' starred' if is_starred }}"
+                                        title="{{ 'Unstar' if is_starred else 'Star' }}"
+                                        aria-pressed="{{ 'true' if is_starred else 'false' }}"
+                                        onclick="toggleStar('{{ current_date }}', '{{ video.name }}', this)">&#9733;</button>
+                                <span style="color:#333">|</span>
                                 <a href="/download/{{ current_date }}/{{ video.name }}">Download</a>
                                 <span style="color:#333">|</span>
                                 <button type="button" class="btn-delete" onclick="deleteSingle('{{ current_date }}', '{{ video.name }}')">Delete</button>
@@ -1015,6 +1035,19 @@
             })
                 .then(function (res) { window.location = res.url || window.location.href; })
                 .catch(function () { alert('Delete failed — check your connection and try again.'); });
+        }
+        function toggleStar(date, filename, btn) {
+            fetch('/star/' + encodeURIComponent(date) + '/' + encodeURIComponent(filename), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                btn.classList.toggle('starred', data.starred);
+                btn.title = data.starred ? 'Unstar' : 'Star';
+                btn.setAttribute('aria-pressed', data.starred);
+            })
+            .catch(function () { alert('Could not update star — try again.'); });
         }
 
         // Submit the bulk download/delete form via fetch with a custom

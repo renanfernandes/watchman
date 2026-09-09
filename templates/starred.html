@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Starred Clips — Watchman</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+        }
+        header {
+            background: #16213e;
+            padding: 1rem 2rem;
+            border-bottom: 2px solid #0f3460;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            position: sticky;
+            top: 0;
+            z-index: 40;
+        }
+        .header-title { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+        .brand-link { color: inherit; text-decoration: none; display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; }
+        .brand-link:hover h1 { color: #ff6b81; }
+        header h1 { font-size: 1.4rem; color: #e94560; }
+        header span { font-size: 0.85rem; color: #666; }
+        .header-actions { margin-left: auto; display: flex; align-items: center; gap: 0.5rem; }
+        .header-link { color: #aaa; text-decoration: none; font-size: 0.82rem; border: 1px solid #0f3460; border-radius: 5px; padding: 0.25rem 0.55rem; }
+        .header-link:hover { color: #e0e0e0; background: #0f3460; }
+        main { max-width: 1080px; margin: 1.5rem auto; padding: 0 1rem 2rem; }
+        h2 { font-size: 1.1rem; color: #e0e0e0; margin-bottom: 1rem; }
+        .date-group { margin-bottom: 2rem; }
+        .date-heading {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #e94560;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid #0f3460;
+            margin-bottom: 0.75rem;
+        }
+        .date-heading a { color: inherit; text-decoration: none; }
+        .date-heading a:hover { text-decoration: underline; }
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+        }
+        .video-card {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: opacity 0.3s;
+        }
+        .video-card.removing { opacity: 0; }
+        .video-card video { width: 100%; display: block; background: #000; max-height: 200px; }
+        .video-wrap { position: relative; }
+        .video-wrap video { width: 100%; display: block; background: #000; max-height: 200px; object-fit: contain; }
+        .play-overlay {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(0,0,0,0.35);
+            border: none;
+            cursor: pointer;
+            font-size: 2.5rem;
+            color: rgba(255,255,255,0.85);
+        }
+        .play-overlay:hover { color: #fff; background: rgba(0,0,0,0.5); }
+        .duration-badge {
+            position: absolute;
+            bottom: 6px;
+            right: 8px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            font-size: 0.72rem;
+            padding: 1px 5px;
+            border-radius: 3px;
+        }
+        .video-info { padding: 0.65rem 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+        .video-info span { font-size: 0.8rem; color: #aaa; flex: 1; }
+        .video-actions { display: flex; gap: 0.5rem; align-items: center; }
+        .video-actions a { color: #e94560; text-decoration: none; font-size: 0.85rem; }
+        .video-actions a:hover { text-decoration: underline; }
+        .btn-unstar {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 0;
+            line-height: 1;
+            color: #f2c94c;
+            transition: color 0.15s;
+        }
+        .btn-unstar:hover { color: #888; }
+        .empty {
+            color: #8da0c2;
+            padding: 1.5rem;
+            background: #16213e;
+            border: 1px dashed #0f3460;
+            border-radius: 8px;
+            text-align: center;
+            line-height: 1.7;
+        }
+        .empty strong { color: #e0e0e0; display: block; margin-bottom: 0.3rem; font-size: 1rem; }
+        @media (max-width: 600px) {
+            header { padding: 1rem; }
+            .video-info { flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-title">
+            <a href="{{ request.url_root }}" class="brand-link">
+                <h1>Watchman</h1>
+                <span>Starred Clips</span>
+            </a>
+        </div>
+        <div class="header-actions">
+            <a href="/" class="header-link">Clips</a>
+            <a href="/dashboard" class="header-link">Dashboard</a>
+            <a href="/settings" class="header-link">Settings</a>
+        </div>
+    </header>
+
+    <main>
+        <h2>&#9733; Starred &mdash; {{ total }} clip{{ 's' if total != 1 }}</h2>
+
+        {% if date_groups %}
+            {% for group in date_groups %}
+            <div class="date-group">
+                <div class="date-heading">
+                    <a href="/date/{{ group.date }}">{{ group.date }}</a>
+                    &mdash; {{ group.videos | length }} clip{{ 's' if group.videos | length != 1 }}
+                </div>
+                <div class="video-grid">
+                    {% for video in group.videos %}
+                    <div class="video-card" id="card-{{ group.date }}-{{ video.name | replace('.', '-') }}">
+                        {% if video_preload == 'none' %}
+                        <div class="video-wrap">
+                            <video preload="none" poster="/thumbnail/{{ group.date }}/{{ video.name }}">
+                                <source src="/video/{{ group.date }}/{{ video.name }}" type="video/mp4">
+                            </video>
+                            <button type="button" class="play-overlay" aria-label="Play video">&#9658;</button>
+                            {% if video.duration %}<span class="duration-badge">{{ video.duration }}</span>{% endif %}
+                        </div>
+                        {% else %}
+                        <video controls preload="{{ video_preload }}" poster="/thumbnail/{{ group.date }}/{{ video.name }}">
+                            <source src="/video/{{ group.date }}/{{ video.name }}" type="video/mp4">
+                        </video>
+                        {% endif %}
+                        <div class="video-info">
+                            <span>
+                                {% if video.time %}<strong style="color:#e0e0e0">{{ video.time }}</strong>{% endif %}
+                                {% if video.camera %}<span style="color:#aaa"> &mdash; {{ video.camera }}</span>{% endif %}
+                                <br><span style="font-size:0.72rem;color:#555">{{ video.name }}</span>
+                            </span>
+                            <div class="video-actions">
+                                <button type="button" class="btn-unstar"
+                                        title="Unstar"
+                                        onclick="unstar('{{ group.date }}', '{{ video.name }}', this)">&#9733;</button>
+                                <span style="color:#333">|</span>
+                                <a href="/download/{{ group.date }}/{{ video.name }}">Download</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="empty">
+            <strong>No starred clips yet.</strong>
+            Browse your clips and click &#9733; on any video to star it.
+        </div>
+        {% endif %}
+    </main>
+
+    <script>
+        // Play-overlay behaviour (same as index.html)
+        document.querySelectorAll('.video-wrap').forEach(function (wrap) {
+            const video = wrap.querySelector('video');
+            const playBtn = wrap.querySelector('.play-overlay');
+            const badge = wrap.querySelector('.duration-badge');
+            if (!video || !playBtn) return;
+            playBtn.addEventListener('click', function () {
+                video.setAttribute('controls', '');
+                playBtn.style.display = 'none';
+                if (badge) badge.style.display = 'none';
+                video.play();
+            });
+            video.addEventListener('play', function () {
+                playBtn.style.display = 'none';
+                if (badge) badge.style.display = 'none';
+            });
+        });
+
+        function unstar(date, filename, btn) {
+            fetch('/star/' + encodeURIComponent(date) + '/' + encodeURIComponent(filename), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data.starred) {
+                    // Fade out and remove the card
+                    const card = btn.closest('.video-card');
+                    if (card) {
+                        card.classList.add('removing');
+                        setTimeout(function () { card.remove(); }, 300);
+                    }
+                }
+            })
+            .catch(function () { alert('Could not unstar — try again.'); });
+        }
+    </script>
+</body>
+</html>

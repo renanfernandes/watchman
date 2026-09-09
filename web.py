@@ -40,6 +40,7 @@ app = Flask(__name__)
 CONFIG_PATH = "watchman.conf"
 RETENTION_STATE_FILE = Path("/tmp/watchman_retention_state.json")
 RETENTION_HISTORY_FILE = Path("/tmp/watchman_retention_history.json")
+STARRED_FILE = Path("/tmp/watchman_starred.json")
 
 
 @app.before_request
@@ -397,6 +398,24 @@ def record_retention_event(date_str: str, action: str, count: int = 1) -> None:
     day = history.setdefault(date_str, {"archived": 0, "deleted": 0})
     day[action] = int(day.get(action, 0)) + count
     save_retention_history(history)
+
+
+def load_stars() -> set:
+    """Return the set of starred clip keys ('YYYY-MM-DD/filename.mp4')."""
+    if not STARRED_FILE.exists():
+        return set()
+    try:
+        return set(json.loads(STARRED_FILE.read_text(encoding="utf-8")))
+    except Exception:
+        return set()
+
+
+def save_stars(stars: set) -> None:
+    try:
+        STARRED_FILE.parent.mkdir(parents=True, exist_ok=True)
+        STARRED_FILE.write_text(json.dumps(sorted(stars)), encoding="utf-8")
+    except Exception as e:
+        log.error("Failed to save stars: %s", e)
 
 
 def move_with_unique_name(src: Path, dst_dir: Path) -> bool:
@@ -976,6 +995,9 @@ def by_date(date_str: str):
         key=str.lower,
     )
 
+    stars = load_stars()
+    starred_names = {k.split("/", 1)[1] for k in stars if k.startswith(date_str + "/")}
+
     return render_template("index.html",
                            dates=list_dates(), current_date=date_str, videos=filtered_videos,
                            dates_map=json.dumps(calendar_status_map()),
@@ -987,7 +1009,8 @@ def by_date(date_str: str):
                            search_query=search_query,
                            selected_camera=selected_camera,
                            camera_options=camera_options,
-                           is_archived=is_archived_copy)
+                           is_archived=is_archived_copy,
+                           starred_names=starred_names)
 
 
 @app.route("/dashboard")
@@ -1312,6 +1335,55 @@ def delete_video(date_str: str, filename: str):
     return redirect(url_for("by_date", date_str=date_str))
 
 
+@app.route("/star/<date_str>/<filename>", methods=["POST"])
+def toggle_star(date_str: str, filename: str):
+    """Toggle the starred state for a clip; returns JSON {starred: bool}."""
+    if not safe_date(date_str) or not safe_filename(filename):
+        abort(400)
+    stars = load_stars()
+    key = f"{date_str}/{filename}"
+    if key in stars:
+        stars.discard(key)
+        starred = False
+    else:
+        stars.add(key)
+        starred = True
+    save_stars(stars)
+    return jsonify({"starred": starred})
+
+
+@app.route("/starred")
+def starred_page():
+    """Show all starred clips."""
+    stars = load_stars()
+    preload = video_settings()["preload"]
+    videos_by_date: dict[str, list] = {}
+    for key in stars:
+        parts = key.split("/", 1)
+        if len(parts) != 2:
+            continue
+        date_str, filename = parts
+        if not safe_date(date_str) or not safe_filename(filename):
+            continue
+        if resolve_clip_path(date_str, filename) is None:
+            continue
+        try:
+            folder_date = _date.fromisoformat(date_str)
+        except ValueError:
+            folder_date = _date.today()
+        meta = parse_video_meta(filename, folder_date, date_str)
+        meta["date"] = date_str
+        videos_by_date.setdefault(date_str, []).append(meta)
+    date_groups = [
+        {"date": d, "videos": sorted(vs, key=lambda v: (v["time"] or "", v["name"]), reverse=True)}
+        for d, vs in sorted(videos_by_date.items(), reverse=True)
+    ]
+    return render_template("starred.html",
+                           date_groups=date_groups,
+                           total=len(stars),
+                           video_preload=preload)
+
+
 @app.route("/bulk/<date_str>", methods=["POST"])
 def bulk_action(date_str: str):
     """Bulk delete or download selected videos."""
@@ -1373,6 +1445,7 @@ if __name__ == "__main__":
     ARCHIVE_DIR = Path(cfg["ARCHIVE_DIR"])
     RETENTION_STATE_FILE = ARCHIVE_DIR / ".retention_state.json"
     RETENTION_HISTORY_FILE = ARCHIVE_DIR / ".retention_history.json"
+    STARRED_FILE = ARCHIVE_DIR / ".starred.json"
     host = cfg.get("WEB_HOST", "0.0.0.0")
     port = args.port or int(cfg.get("WEB_PORT", "5000"))
 
