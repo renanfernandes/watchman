@@ -1,0 +1,14 @@
+{
+  "name": "watchman-docs-checks",
+  "private": true,
+  "scripts": {
+    "check": "npm run check:markdown && npm run check:links",
+    "check:markdown": "cd .. && .github/node_modules/.bin/markdownlint-cli2",
+    "check:links": "remark --use remark-validate-links --frail --no-stdout ../README.md ../CHANGELOG.md '../docs/**/*.md'"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.23.2",
+    "remark-cli": "12.0.1",
+    "remark-validate-links": "13.1.0"
+  }
+}
