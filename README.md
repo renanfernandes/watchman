@@ -39,6 +39,12 @@ Start with a Raspberry Pi Zero 2 W, Raspberry Pi OS, a Blink Sync Module 2, stor
 
 **On the Pi**, logged in as the user that should own the recordings:
 
+Confirm Git is installed:
+```bash
+sudo apt install git
+```
+
+Install the application:
 ```bash
 git clone https://github.com/renanfernandes/watchman.git "$HOME/watchman"
 cd "$HOME/watchman"
@@ -47,6 +53,10 @@ sudo nano /etc/watchman/watchman.conf
 sudo chown root:"$(id -gn)" /etc/watchman/watchman.conf
 sudo chmod 660 /etc/watchman/watchman.conf
 test -w /etc/watchman/watchman.conf && echo "Config is writable"
+```
+
+Finally reboot once the installation completes succesfully:
+```bash
 sudo reboot
 ```
 
